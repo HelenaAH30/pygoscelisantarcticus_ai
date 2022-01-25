@@ -76,14 +76,14 @@ def save_boxplot(penguin_number, penguin_data):
     fig.savefig(filename)
     
     
-def delete_velocity_outliers(penguin):
-    mean = penguin['velocity'].mean()
-    sigma = penguin['velocity'].std()
-    sigma3 = 3*sigma
-    penguin.loc[(penguin['velocity'] <= mean + sigma3) | (penguin['velocity'] >= mean - sigma3),:]
+# def delete_velocity_outliers(penguin):
+#     mean = penguin['velocity'].mean()
+#     sigma = penguin['velocity'].std()
+#     sigma3 = 3*sigma
+#     penguin.loc[(penguin['velocity'] <= mean + sigma3) | (penguin['velocity'] >= mean - sigma3),:]
 
 #%%
-file = 'viaje1_newpeng01.csv'
+file = 'viaje2_newpeng03.csv'
 # Parse data
 penguin = load_data(file)
 penguin = parse_dates(file)
@@ -98,7 +98,7 @@ penguin['trip'] = trip_number
 penguin['peng_number'] = peng_number
 
 # Outlier detection and removal
-save_boxplot(peng_number)
+save_boxplot(peng_number, penguin_data)
 # penguin = delete_velocity_outliers(penguin)
 
 
