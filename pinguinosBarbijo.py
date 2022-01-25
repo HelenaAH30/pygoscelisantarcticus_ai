@@ -18,8 +18,8 @@ import cartopy.crs as ccrs
 
 import shapely.geometry as sgeom
 #%%Configuration
-os.chdir('/Volumes/MUSI-HAH/TFM/penguin_data/nombres_unificados/')
-
+# os.chdir('/Volumes/MUSI-HAH/TFM/penguin_data/nombres_unificados/')
+os.chdir('/home/Documents/nombres_unificados/')
 
 
 #%% Functions
