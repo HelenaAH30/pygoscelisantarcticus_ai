@@ -21,6 +21,7 @@ import shapely.geometry as sgeom
 os.chdir('/Volumes/MUSI-HAH/TFM/penguin_data/nombres_unificados/')
 
 
+
 #%% Functions
 
 def load_data(file):
@@ -84,6 +85,7 @@ def save_boxplot(penguin_number, penguin_data):
 
 #%%
 file = 'viaje2_newpeng03.csv'
+file = 'viaje2_newpeng03_nido75.csv'
 # Parse data
 penguin = load_data(file)
 penguin = parse_dates(file)
