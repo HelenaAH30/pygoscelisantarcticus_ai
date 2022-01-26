@@ -5,6 +5,7 @@ Created on Mon Nov  2 18:20:29 2020
 
 @author: Helena
 """
+#%% Libraries
 import os
 import numpy as np
 import pandas as pd
@@ -19,16 +20,17 @@ import cartopy.crs as ccrs
 import shapely.geometry as sgeom
 #%%Configuration
 # os.chdir('/Volumes/MUSI-HAH/TFM/penguin_data/nombres_unificados/')
-os.chdir('/home/Documents/')
-data_folder = 'nombres_unificados/'
-results_folder = 'results_peng/'
+os.chdir('/home/helena/Documents')
+_DATA_FOLDER = 'nombres_unificados/'
+_RESULTS_FOLDER = 'results_peng/'
 
 
 #%% Functions
 
 def load_data(file):
     # Loading data
-    penguin = pd.read_csv(file, delim_whitespace=True, lineterminator='\n', header=None)
+    filename = _DATA_FOLDER + file
+    penguin = pd.read_csv(filename, delim_whitespace=True, lineterminator='\n', header=None)
     # Rename columns
     penguin = penguin.rename(columns= {0:"name", 1:"date",2:"time", 3:"undef1", 4:"undef2",
                              5:"undef3", 6:"active_dry", 7:"depth", 8:"temp",
@@ -50,7 +52,7 @@ def calcule_velocity (penguin):
     # Calcule of time delta between points
     penguin['delta_time'] = penguin.datetime.diff()
     # Matrix of spatial diferences
-    matrix_cdist = cdist(penguin.loc[0:5000,['lat','lon']].to_numpy(),penguin.loc[1:5001,['lat','lon']].to_numpy())
+    matrix_cdist = cdist(penguin[['lat','lon']].to_numpy(),penguin[['lat','lon']].to_numpy())
     # Select diagonal of spatial diferences matrix
     diagonal_plus1 = np.diagonal(matrix_cdist, offset = 1) # array[i,i+1]
     penguin['delta_space'] = diagonal_plus1
@@ -74,7 +76,7 @@ def save_boxplot(penguin_number, penguin_data):
     boxplot = sns.boxplot(x=penguin_data['velocity'])
     # create figure
     fig = boxplot.get_figure()
-    filename = './figures/' + penguin_number + '.png'
+    filename = _RESULTS_FOLDER +'figures/' + penguin_number + '.png'
     # save figure
     fig.savefig(filename)
     
@@ -88,9 +90,10 @@ def save_boxplot(penguin_number, penguin_data):
 #%%
 file = 'viaje2_newpeng03.csv'
 file = 'viaje2_newpeng03_nido75.csv'
+file = 'viaje3_newpeng23_nido91.csv'
 # Parse data
 penguin = load_data(file)
-penguin = parse_dates(file)
+penguin = parse_dates(penguin)
 penguin = calcule_velocity (penguin)
 
 # Penguin data
