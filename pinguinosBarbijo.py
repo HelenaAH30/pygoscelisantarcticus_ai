@@ -19,7 +19,9 @@ import cartopy.crs as ccrs
 import shapely.geometry as sgeom
 #%%Configuration
 # os.chdir('/Volumes/MUSI-HAH/TFM/penguin_data/nombres_unificados/')
-os.chdir('/home/Documents/nombres_unificados/')
+os.chdir('/home/Documents/')
+data_folder = 'nombres_unificados/'
+results_folder = 'results_peng/'
 
 
 #%% Functions
@@ -100,7 +102,7 @@ penguin['trip'] = trip_number
 penguin['peng_number'] = peng_number
 
 # Outlier detection and removal
-save_boxplot(peng_number, penguin_data)
+save_boxplot(peng_number, penguin)
 # penguin = delete_velocity_outliers(penguin)
 
 
