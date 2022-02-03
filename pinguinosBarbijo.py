@@ -6,10 +6,10 @@ Created on Mon Nov  2 18:20:29 2020
 @author: Helena
 """
 #%% Libraries
+import math
 import os
 import numpy as np
 import pandas as pd
-from scipy.spatial.distance import cdist
 
 import seaborn as sns
 
@@ -51,11 +51,17 @@ def parse_dates(penguin):
 def calcule_velocity (penguin):
     # Calcule of time delta between points
     penguin['delta_time'] = penguin.datetime.diff()
+    # Calcule spatial difference between points
+    penguin[['lon_shift', 'lat_shift']] = penguin[['lon', 'lat']].shift(periods=1)
+    penguin['delta_space'] = penguin.apply(lambda x: distance_btwn_lonlatpoints(penguin.lon, penguin.lat, penguin.lon_shift, penguin.lat_shift), axis=1)
+
+    ''' Deprecated
     # Matrix of spatial diferences
     matrix_cdist = cdist(penguin[['lat','lon']].to_numpy(),penguin[['lat','lon']].to_numpy())
     # Select diagonal of spatial diferences matrix
     diagonal_plus1 = np.diagonal(matrix_cdist, offset = 1) # array[i,i+1]
     penguin['delta_space'] = diagonal_plus1
+    '''
     #Calcule velotity column
     penguin['velocity'] = penguin['delta_space']/penguin['delta_time']
     return penguin
@@ -79,7 +85,93 @@ def save_boxplot(penguin_number, penguin_data):
     filename = _RESULTS_FOLDER +'figures/' + penguin_number + '.png'
     # save figure
     fig.savefig(filename)
+
+def distance_btwn_lonlatpoints(lon_1, lat_1, lon_2, lat_2):
+    coords_1 = (lon_1, lat_1)
+    coords_2 = (lon_2, lat_2)
+    #dist = geopy.distance.vincenty(coords_1, coords_2).km
+    dist = geopy.distance.geodesic(coords_1, coords_2).km
+
+    return dist
+
+def distance2apoint(lon, lat, lonp, latp):
+    dist = np.zeros(lon.shape)
+    for k in np.arange(lon.shape[0]):
+        coords_1 = (lon[k], lat[k])
+        coords_2 = (lonp, latp)
+        #dist[k] = geopy.distance.vincenty(coords_1, coords_2).km
+        dist[k] = geopy.distance.geodesic(coords_1, coords_2).km
+
+    return dist
+
+def _length_lon_lat_degs(lat_mean_deg, latitude=False, longitude=False):
+
+    '''
+    Function to infer the length of a degree of longitude
+    and the length of a degree of latitude
+    at a specific latitude position.
+    Assuming that the Earth is an ellipsoid.
+
+    input: latitude in DEGREES!!!
+    output: length_deg_lon, length_deg_lat in meters
+
+    from:
+    https://en.wikipedia.org/wiki/Longitude#Length_of_a_degree_of_longitude
+    https://en.wikipedia.org/wiki/Latitude#Length_of_a_degree_of_latitude
+    '''
+
+    ''' Earth parameters '''
+    lat_mean_rad = lat_mean_deg*(np.pi/180) #in radians
+
+    a = 6378137.0 # m (equatorial radius)
+    b = 6356752.3142 # m (polar radius)
+
+    ecc_2 = (a**2 - b**2) / a**2 # eccentricity squared
     
+    if longitude:
+        ''' The length of a degree of longitude is... '''
+
+        divident_lon = (a*np.pi/180) * np.cos(lat_mean_rad)
+        divisor_lon = np.sqrt(1 - (ecc_2*np.sin(lat_mean_rad)*np.sin(lat_mean_rad)))
+
+        length_deg_lon = divident_lon / divisor_lon
+    else:
+        length_deg_lon = None
+
+    if latitude:
+        ''' The length of a degree of latitude is... '''
+
+        divident_lat = (a*np.pi/180) * (1 - ecc_2)
+        divisor_lat = (1 - (ecc_2 * np.sin(lat_mean_rad) * np.sin(lat_mean_rad)))**(3/2)
+
+        length_deg_lat = divident_lat / divisor_lat
+    else:
+        length_deg_lat = None
+
+    return length_deg_lon, length_deg_lat
+
+def _convert_delta_latlon_to_kms(dlon_deg, dlat_deg, lat_mean_deg, latitude=False, longitude=False):
+    length_deg_lonp, length_deg_latp = _length_lon_lat_degs(lat_mean_deg, latitude, longitude)
+    if longitude:
+        dx_km = dlon_deg * (length_deg_lonp/1000)
+    else:
+        dx_km = None
+    if latitude:
+        dy_km = dlat_deg * (length_deg_latp/1000)
+    else:
+        dy_km = None
+
+    return dx_km, dy_km
+
+def _distance_km(dx_km,dy_km):
+    delta_km = math.sqrt(dx_km**2 + dy_km**2)
+    return delta_km
+
+def compute_delta_kms(delta_lon, delta_lat):
+    lat_mean_deg = delta_lat/2
+    dx_km, dy_km = _convert_delta_latlon_to_kms(delta_lon, delta_lat, lat_mean_deg, latitude, longitude)
+    delta_km = _distance_km(dx_km,dy_km)
+    return delta_km
     
 # def delete_velocity_outliers(penguin):
 #     mean = penguin['velocity'].mean()
