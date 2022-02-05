@@ -6,8 +6,9 @@ Created on Mon Nov  2 18:20:29 2020
 @author: Helena
 """
 #%% Libraries
-import math
 import os
+import math
+import geopy.distance as gp
 import numpy as np
 import pandas as pd
 
@@ -21,8 +22,8 @@ import shapely.geometry as sgeom
 #%%Configuration
 # os.chdir('/Volumes/MUSI-HAH/TFM/penguin_data/nombres_unificados/')
 os.chdir('/home/helena/Documents')
-_DATA_FOLDER = 'nombres_unificados/'
-_RESULTS_FOLDER = 'results_peng/'
+_DATA_FOLDER = './nombres_unificados/'
+_RESULTS_FOLDER = './results_peng/'
 
 
 #%% Functions
@@ -52,8 +53,10 @@ def calcule_velocity (penguin):
     # Calcule of time delta between points
     penguin['delta_time'] = penguin.datetime.diff()
     # Calcule spatial difference between points
+    penguin = _replace_lat_outofrange(penguin)
+    penguin.dropna(axis=0, how='any', inplace=True)
     penguin[['lon_shift', 'lat_shift']] = penguin[['lon', 'lat']].shift(periods=1)
-    penguin['delta_space'] = penguin.apply(lambda x: distance_btwn_lonlatpoints(penguin.lon, penguin.lat, penguin.lon_shift, penguin.lat_shift), axis=1)
+    penguin['delta_space'] = penguin.apply(lambda row: _distance_btwn_lonlatpoints(row.lon, row.lat, row.lon_shift, row.lat_shift), axis=1)
 
     ''' Deprecated
     # Matrix of spatial diferences
@@ -86,13 +89,23 @@ def save_boxplot(penguin_number, penguin_data):
     # save figure
     fig.savefig(filename)
 
-def distance_btwn_lonlatpoints(lon_1, lat_1, lon_2, lat_2):
+def _distance_btwn_lonlatpoints(lon_1, lat_1, lon_2, lat_2):
     coords_1 = (lon_1, lat_1)
     coords_2 = (lon_2, lat_2)
-    #dist = geopy.distance.vincenty(coords_1, coords_2).km
-    dist = geopy.distance.geodesic(coords_1, coords_2).km
+    dist = gp.distance(coords_1, coords_2).km
+    #dist = gp.vincenty(coords_1, coords_2).km
 
     return dist
+
+
+def _replace_lat_outofrange(penguin):
+    """
+    There was values == -244.03267
+    """
+    penguin.lat[(penguin.lat<-90) | (penguin.lat>90)] = np.nan
+
+    return penguin
+
 
 def distance2apoint(lon, lat, lonp, latp):
     dist = np.zeros(lon.shape)
@@ -100,7 +113,7 @@ def distance2apoint(lon, lat, lonp, latp):
         coords_1 = (lon[k], lat[k])
         coords_2 = (lonp, latp)
         #dist[k] = geopy.distance.vincenty(coords_1, coords_2).km
-        dist[k] = geopy.distance.geodesic(coords_1, coords_2).km
+        dist[k] = gp.distance(coords_1, coords_2).km
 
     return dist
 
@@ -182,7 +195,7 @@ def compute_delta_kms(delta_lon, delta_lat):
 #%%
 file = 'viaje2_newpeng03.csv'
 file = 'viaje2_newpeng03_nido75.csv'
-file = 'viaje3_newpeng23_nido91.csv'
+# file = 'viaje3_newpeng23_nido91.csv'
 # Parse data
 penguin = load_data(file)
 penguin = parse_dates(penguin)
