@@ -6,11 +6,13 @@ Created on Mon Nov  2 18:20:29 2020
 @author: Helena
 """
 #%% Libraries
+from cmath import nan
 import os
 import math
-import geopy.distance as gp
+import glob
 import numpy as np
 import pandas as pd
+import geopy.distance as gp
 
 import seaborn as sns
 
@@ -52,6 +54,8 @@ def parse_dates(penguin):
 def calcule_velocity (penguin):
     # Calcule of time delta between points
     penguin['delta_time'] = penguin.datetime.diff()
+    penguin['delta_time'] = penguin.apply(lambda row: row.delta_time.total_seconds(), axis=1)
+
     # Calcule spatial difference between points
     penguin = _replace_lat_outofrange(penguin)
     penguin.dropna(axis=0, how='any', inplace=True)
@@ -85,17 +89,20 @@ def save_boxplot(penguin_number, penguin_data):
     boxplot = sns.boxplot(x=penguin_data['velocity'])
     # create figure
     fig = boxplot.get_figure()
-    filename = _RESULTS_FOLDER +'figures/' + penguin_number + '.png'
+    filename = _RESULTS_FOLDER +'figures/penguin' + str(penguin_number) + '_boxplot.png'
     # save figure
     fig.savefig(filename)
 
 def _distance_btwn_lonlatpoints(lon_1, lat_1, lon_2, lat_2):
-    coords_1 = (lon_1, lat_1)
-    coords_2 = (lon_2, lat_2)
-    dist = gp.distance(coords_1, coords_2).km
-    #dist = gp.vincenty(coords_1, coords_2).km
+    coords_1 = (lat_1,lon_1)
+    coords_2 = (lat_2,lon_2)
+    try:
+        dist = gp.distance(coords_1, coords_2).km
+        #dist = gp.vincenty(coords_1, coords_2).km
+        return dist
+    except: 
+        return np.nan
 
-    return dist
 
 
 def _replace_lat_outofrange(penguin):
@@ -186,16 +193,27 @@ def compute_delta_kms(delta_lon, delta_lat):
     delta_km = _distance_km(dx_km,dy_km)
     return delta_km
     
-# def delete_velocity_outliers(penguin):
-#     mean = penguin['velocity'].mean()
-#     sigma = penguin['velocity'].std()
-#     sigma3 = 3*sigma
-#     penguin.loc[(penguin['velocity'] <= mean + sigma3) | (penguin['velocity'] >= mean - sigma3),:]
+def detect_velocity_outliers(penguin):
+    mean = penguin['velocity'].mean()
+    sigma = penguin['velocity'].std()
+    sigma3 = 3*sigma
+    penguin['outlier'] = (penguin['velocity'] >= mean + sigma3) | (penguin['velocity'] <= mean - sigma3) #element-wise | and &
+    return penguin
 
 #%%
+
+files = glob.glob(_DATA_FOLDER+'*.csv')
+
+# file statistical analysis
+files_df = pd.DataFrame()
+files_df['files'] = files
+files_df['peng_number'] = files_df.apply(lambda row: extract_peng_number(row.files), axis=1)
+files_df['trip'] = files_df.apply(lambda row: extract_trip_number(row.files), axis=1)
+
+
 file = 'viaje2_newpeng03.csv'
 file = 'viaje2_newpeng03_nido75.csv'
-# file = 'viaje3_newpeng23_nido91.csv'
+
 # Parse data
 penguin = load_data(file)
 penguin = parse_dates(penguin)
@@ -209,9 +227,14 @@ peng_number = extract_peng_number(file)
 penguin['trip'] = trip_number
 penguin['peng_number'] = peng_number
 
+# Filter velocity=0
+penguin = penguin.loc[penguin.velocity!=0,:]
+
 # Outlier detection and removal
 save_boxplot(peng_number, penguin)
-# penguin = delete_velocity_outliers(penguin)
+penguin = detect_velocity_outliers(penguin)
+penguin_out = penguin.loc[penguin.outlier !=True,:]
+save_boxplot(peng_number, penguin_out)
 
 
 
