@@ -226,30 +226,31 @@ penguin_out.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}
 
 #%% Track
 
-# lons = penguin ['lon']
-# lats = penguin ['lat']
+lons = penguin ['lon']
+lats = penguin ['lat']
 
-# track = sgeom.LineString(zip(lons, lats))
+track = sgeom.LineString(zip(lons, lats))
 
-# #%% Plot
-# lonW = min(lons) #-62.9
-# lonE = max(lons) #-60
-# latS = min(lats) #-63
-# latN = max(lats) #-60
+#%% Plot
+lonW = min(lons) #-62.9
+lonE = max(lons) #-60
+latS = min(lats) #-63
+latN = max(lats) #-60
 
-# fig = plt.figure(figsize=(20,10))
-# ax = fig.add_axes([0, 0, 1, 1], projection=ccrs.PlateCarree())
+fig = plt.figure()
+ax = fig.add_axes([0, 0, 1, 1], projection=ccrs.PlateCarree())
 
-# #ax1.contourf(lonSLA,latSLA,SLAmean_90, cmap='YlOrRd', extend='both', levels=cflevels)
+#ax1.contourf(lonSLA,latSLA,SLAmean_90, cmap='YlOrRd', extend='both', levels=cflevels)
 
-# ax.set_extent([lonW, lonE, latS, latN])
-# #ax.add_feature(cfeature.GSHHSFeature(levels = [5,6],scale='full',facecolor='silver'))
-# #ax.add_feature(cfeature.NaturalEarthFeature('physical', 'ne_10m_minor_islands_coastline', scale ='10m')) #ne_10m_minor_islands_coastline
-# ax.coastlines(resolution ='10m')
-# ax.set_xticks(np.arange(lonW,lonE,5), crs=ccrs.PlateCarree())
-# ax.set_yticks(np.arange(latS,latN,5), crs=ccrs.PlateCarree())
-# ax.set_title('Penguin track',fontsize=18)
-# ax.set_ylabel('Latitude',fontsize=16)
-# ax.set_xlabel('Longitude',fontsize=16)
+ax.set_extent([lonW, lonE, latS, latN])
+#ax.add_feature(cfeature.GSHHSFeature(levels = [5,6],scale='full',facecolor='silver'))
+#ax.add_feature(cfeature.NaturalEarthFeature('physical', 'ne_10m_minor_islands_coastline', scale ='10m')) #ne_10m_minor_islands_coastline
+ax.coastlines(resolution ='10m')
+ax.set_xticks(np.arange(lonW,lonE,5), crs=ccrs.PlateCarree())
+ax.set_yticks(np.arange(latS,latN,5), crs=ccrs.PlateCarree())
+ax.set_title('Penguin track',fontsize=18)
+ax.set_ylabel('Latitude',fontsize=16)
+ax.set_xlabel('Longitude',fontsize=16)
 
-# ax.add_geometries([track], ccrs.PlateCarree(),facecolor='none', edgecolor='red')
+ax.add_geometries([track], ccrs.PlateCarree(),facecolor='none', edgecolor='red')
+plt.savefig(_RESULTS_FOLDER +'figures/test.png')
