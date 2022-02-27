@@ -7,6 +7,7 @@ Created on Mon Nov  2 18:20:29 2020
 """
 #%% Libraries
 from cmath import nan
+from itertools import groupby
 import os
 import math
 import glob
@@ -26,6 +27,7 @@ import shapely.geometry as sgeom
 os.chdir('/home/helena/Documents')
 _DATA_FOLDER = './nombres_unificados/'
 _RESULTS_FOLDER = './results_peng/'
+_NEWDATA_FOLDER = './results_peng/new_data/'
 
 
 #%% Functions
@@ -51,6 +53,25 @@ def parse_dates(penguin):
     return penguin
 
 
+def _distance_btwn_lonlatpoints(lon_1, lat_1, lon_2, lat_2):
+    coords_1 = (lat_1,lon_1)
+    coords_2 = (lat_2,lon_2)
+    try:
+        dist = gp.distance(coords_1, coords_2).km
+        #dist = gp.vincenty(coords_1, coords_2).km
+        return dist
+    except: 
+        return np.nan
+    
+
+def _replace_lat_outofrange(penguin):
+    """
+    There was values == -244.03267
+    """
+    penguin.lat[(penguin.lat<-90) | (penguin.lat>90)] = np.nan
+
+    return penguin
+
 def calcule_velocity (penguin):
     # Calcule of time delta between points
     penguin['delta_time'] = penguin.datetime.diff()
@@ -75,124 +96,70 @@ def calcule_velocity (penguin):
 
 
 def extract_trip_number(filename):
+    filename = filename[21:-11] # TODO: change!!
     trip_number = int(filename.split('_')[0].split('viaje')[1])
     return trip_number
 
 
 def extract_peng_number(filename):
+    filename = filename[21:-11] # TODO: change!!
     peng_number = int(filename.split('_')[1].split('.')[0].split('newpeng')[1])
     return peng_number
 
 
-def save_boxplot(penguin_number, penguin_data):
+def save_boxplot(penguin_number, penguin_data, string = None):
     # plot
     boxplot = sns.boxplot(x=penguin_data['velocity'])
+    boxplot.set_xlabel('Velocity (m/s)')
+    boxplot.set_title(f'Penguin {penguin_number}')
     # create figure
     fig = boxplot.get_figure()
-    filename = _RESULTS_FOLDER +'figures/penguin' + str(penguin_number) + '_boxplot.png'
+    if string != None:
+       filename = _RESULTS_FOLDER +'figures/penguin' + str(penguin_number) + '_boxplot_'+ string + '.png' 
+    else:
+        filename = _RESULTS_FOLDER +'figures/penguin' + str(penguin_number) + '_boxplot.png'
     # save figure
     fig.savefig(filename)
-
-def _distance_btwn_lonlatpoints(lon_1, lat_1, lon_2, lat_2):
-    coords_1 = (lat_1,lon_1)
-    coords_2 = (lat_2,lon_2)
-    try:
-        dist = gp.distance(coords_1, coords_2).km
-        #dist = gp.vincenty(coords_1, coords_2).km
-        return dist
-    except: 
-        return np.nan
+    plt.close(fig) # close the figure
 
 
+def compose_statscsv(files_list):
+    files_df = pd.DataFrame()
+    files_df['files'] = files_list
+    files_df['peng_number'] = files_df.apply(lambda row: extract_peng_number(row.files), axis=1)
+    files_df['trip'] = files_df.apply(lambda row: extract_trip_number(row.files), axis=1)
+    files_df = pd.DataFrame(files_df.groupby(['peng_number']).count())
+    files_df['trip'].to_csv(_RESULTS_FOLDER + "files_statisticaldata.csv")
+    return files_df
 
-def _replace_lat_outofrange(penguin):
-    """
-    There was values == -244.03267
-    """
-    penguin.lat[(penguin.lat<-90) | (penguin.lat>90)] = np.nan
 
-    return penguin
-
-
-def distance2apoint(lon, lat, lonp, latp):
-    dist = np.zeros(lon.shape)
-    for k in np.arange(lon.shape[0]):
-        coords_1 = (lon[k], lat[k])
-        coords_2 = (lonp, latp)
-        #dist[k] = geopy.distance.vincenty(coords_1, coords_2).km
-        dist[k] = gp.distance(coords_1, coords_2).km
-
-    return dist
-
-def _length_lon_lat_degs(lat_mean_deg, latitude=False, longitude=False):
-
-    '''
-    Function to infer the length of a degree of longitude
-    and the length of a degree of latitude
-    at a specific latitude position.
-    Assuming that the Earth is an ellipsoid.
-
-    input: latitude in DEGREES!!!
-    output: length_deg_lon, length_deg_lat in meters
-
-    from:
-    https://en.wikipedia.org/wiki/Longitude#Length_of_a_degree_of_longitude
-    https://en.wikipedia.org/wiki/Latitude#Length_of_a_degree_of_latitude
-    '''
-
-    ''' Earth parameters '''
-    lat_mean_rad = lat_mean_deg*(np.pi/180) #in radians
-
-    a = 6378137.0 # m (equatorial radius)
-    b = 6356752.3142 # m (polar radius)
-
-    ecc_2 = (a**2 - b**2) / a**2 # eccentricity squared
-    
-    if longitude:
-        ''' The length of a degree of longitude is... '''
-
-        divident_lon = (a*np.pi/180) * np.cos(lat_mean_rad)
-        divisor_lon = np.sqrt(1 - (ecc_2*np.sin(lat_mean_rad)*np.sin(lat_mean_rad)))
-
-        length_deg_lon = divident_lon / divisor_lon
+def save_barplot(df, string = None):
+    date = pd.to_datetime('today').strftime('%Y%m%d')
+    # plot
+    barplot = sns.barplot(data = df, y = 'trip', x = df.index)
+    barplot.set_xlabel('Penguin number')
+    barplot.set_ylabel('Number of trips')
+    # create figure
+    fig = barplot.get_figure()
+    if string != None:
+       filename = _RESULTS_FOLDER +'figures/satistics_barplot_' + date +'_'+ string + '.png' 
     else:
-        length_deg_lon = None
+        filename = _RESULTS_FOLDER +'figures/satistics_barplot_' + date + '.png'
+    # save figure
+    fig.savefig(filename)
+    plt.close(fig) # close the figure
 
-    if latitude:
-        ''' The length of a degree of latitude is... '''
 
-        divident_lat = (a*np.pi/180) * (1 - ecc_2)
-        divisor_lat = (1 - (ecc_2 * np.sin(lat_mean_rad) * np.sin(lat_mean_rad)))**(3/2)
+def write_txt_statistics(files_df):
+    file_stats_route = _RESULTS_FOLDER + "files_statisticaldata.txt"
+    file_stats = open(file_stats_route, "w")
+    file_stats.write("**********************" + os.linesep)
+    file_stats.write(f"Número de archivos analizados: {len(files_df)}" + os.linesep)
+    file_stats.write(f"Media de viajes por pinguino: {files_df.trip.mean()}" + os.linesep)
+    file_stats.write("**********************")
+    file_stats.close()
+   
 
-        length_deg_lat = divident_lat / divisor_lat
-    else:
-        length_deg_lat = None
-
-    return length_deg_lon, length_deg_lat
-
-def _convert_delta_latlon_to_kms(dlon_deg, dlat_deg, lat_mean_deg, latitude=False, longitude=False):
-    length_deg_lonp, length_deg_latp = _length_lon_lat_degs(lat_mean_deg, latitude, longitude)
-    if longitude:
-        dx_km = dlon_deg * (length_deg_lonp/1000)
-    else:
-        dx_km = None
-    if latitude:
-        dy_km = dlat_deg * (length_deg_latp/1000)
-    else:
-        dy_km = None
-
-    return dx_km, dy_km
-
-def _distance_km(dx_km,dy_km):
-    delta_km = math.sqrt(dx_km**2 + dy_km**2)
-    return delta_km
-
-def compute_delta_kms(delta_lon, delta_lat):
-    lat_mean_deg = delta_lat/2
-    dx_km, dy_km = _convert_delta_latlon_to_kms(delta_lon, delta_lat, lat_mean_deg, latitude, longitude)
-    delta_km = _distance_km(dx_km,dy_km)
-    return delta_km
-    
 def detect_velocity_outliers(penguin):
     mean = penguin['velocity'].mean()
     sigma = penguin['velocity'].std()
@@ -202,17 +169,22 @@ def detect_velocity_outliers(penguin):
 
 #%%
 
-files = glob.glob(_DATA_FOLDER+'*.csv')
+files_list = glob.glob(_DATA_FOLDER+'*.csv')
 
-# file statistical analysis
-files_df = pd.DataFrame()
-files_df['files'] = files
-files_df['peng_number'] = files_df.apply(lambda row: extract_peng_number(row.files), axis=1)
-files_df['trip'] = files_df.apply(lambda row: extract_trip_number(row.files), axis=1)
+# statistical analysis
+files_df = compose_statscsv(files_list)
+save_barplot(files_df)
+write_txt_statistics(files_df)
 
 
 file = 'viaje2_newpeng03.csv'
 file = 'viaje2_newpeng03_nido75.csv'
+
+# from multiprocessing import Pool
+
+# if __name__ == '__main__':
+#     pool = Pool(processes=6) # max RAM used = 9Gbs, 62,7/9 = 6.9067
+#     pool.map(function, args)
 
 # Parse data
 penguin = load_data(file)
@@ -227,14 +199,21 @@ peng_number = extract_peng_number(file)
 penguin['trip'] = trip_number
 penguin['peng_number'] = peng_number
 
+save_boxplot(peng_number, penguin, string = 'step1_nofiltered')
+penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{1}.csv")
 # Filter velocity=0
-penguin = penguin.loc[penguin.velocity!=0,:]
+penguin = penguin.loc[penguin.velocity > 0,:].reset_index()
+penguin = penguin.loc[penguin.velocity < 20,:].reset_index()
+
 
 # Outlier detection and removal
-save_boxplot(peng_number, penguin)
+save_boxplot(peng_number, penguin, string = 'step2_filtered')
 penguin = detect_velocity_outliers(penguin)
-penguin_out = penguin.loc[penguin.outlier !=True,:]
-save_boxplot(peng_number, penguin_out)
+penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{2}.csv")
+
+penguin_out = penguin.loc[penguin.outlier !=True,:].reset_index()
+save_boxplot(peng_number, penguin_out, string = 'step3_withoutoutliers')
+penguin_out.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{3}.csv")
 
 
 
@@ -243,7 +222,8 @@ save_boxplot(peng_number, penguin_out)
 
 
 
-# #%% Track
+
+#%% Track
 
 # lons = penguin ['lon']
 # lats = penguin ['lat']
