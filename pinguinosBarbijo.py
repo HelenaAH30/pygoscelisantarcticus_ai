@@ -82,36 +82,34 @@ def calcule_velocity (penguin):
     penguin.dropna(axis=0, how='any', inplace=True)
     penguin[['lon_shift', 'lat_shift']] = penguin[['lon', 'lat']].shift(periods=1)
     penguin['delta_space'] = penguin.apply(lambda row: _distance_btwn_lonlatpoints(row.lon, row.lat, row.lon_shift, row.lat_shift), axis=1)
-
-    ''' Deprecated
-    # Matrix of spatial diferences
-    matrix_cdist = cdist(penguin[['lat','lon']].to_numpy(),penguin[['lat','lon']].to_numpy())
-    # Select diagonal of spatial diferences matrix
-    diagonal_plus1 = np.diagonal(matrix_cdist, offset = 1) # array[i,i+1]
-    penguin['delta_space'] = diagonal_plus1
-    '''
     #Calcule velotity column
     penguin['velocity'] = penguin['delta_space']/penguin['delta_time']
     return penguin
 
 
 def extract_trip_number(filename):
-    filename = filename[21:-11] # TODO: change!!
+    if len(filename) == 27:
+        filename = filename [0:-11]
+    else:
+        filename = filename[21:-11] # TODO: change!!
     trip_number = int(filename.split('_')[0].split('viaje')[1])
     return trip_number
 
 
 def extract_peng_number(filename):
-    filename = filename[21:-11] # TODO: change!!
+    if len(filename) == 27:
+        filename = filename [0:-11]
+    else:
+        filename = filename[21:-11] # TODO: change!!
     peng_number = int(filename.split('_')[1].split('.')[0].split('newpeng')[1])
     return peng_number
 
 
-def save_boxplot(penguin_number, penguin_data, string = None):
+def save_boxplot(penguin_number, trip_number, penguin_data, string = None):
     # plot
     boxplot = sns.boxplot(x=penguin_data['velocity'])
     boxplot.set_xlabel('Velocity (m/s)')
-    boxplot.set_title(f'Penguin {penguin_number}')
+    boxplot.set(title = f'Penguin {penguin_number} - Trip {trip_number}')
     # create figure
     fig = boxplot.get_figure()
     if string != None:
@@ -199,20 +197,23 @@ peng_number = extract_peng_number(file)
 penguin['trip'] = trip_number
 penguin['peng_number'] = peng_number
 
-save_boxplot(peng_number, penguin, string = 'step1_nofiltered')
+# STEP 1
+save_boxplot(peng_number, trip_number, penguin, string = 'step1_nofiltered')
 penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{1}.csv")
-# Filter velocity=0
+
+# STEP 2
+# Filter velocity=<0
 penguin = penguin.loc[penguin.velocity > 0,:].reset_index()
+# Filter velocity>20
 penguin = penguin.loc[penguin.velocity < 20,:].reset_index()
-
-
 # Outlier detection and removal
-save_boxplot(peng_number, penguin, string = 'step2_filtered')
+save_boxplot(peng_number, trip_number, penguin, string = 'step2_filtered')
 penguin = detect_velocity_outliers(penguin)
 penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{2}.csv")
 
-penguin_out = penguin.loc[penguin.outlier !=True,:].reset_index()
-save_boxplot(peng_number, penguin_out, string = 'step3_withoutoutliers')
+# STEP 3
+penguin_out = penguin.loc[penguin.outlier !=True,:]
+save_boxplot(peng_number, trip_number, penguin_out, string = 'step3_withoutoutliers')
 penguin_out.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{3}.csv")
 
 
@@ -231,10 +232,10 @@ penguin_out.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}
 # track = sgeom.LineString(zip(lons, lats))
 
 # #%% Plot
-# lonW = -62.9
-# lonE = -60
-# latS = -63
-# latN = -60
+# lonW = min(lons) #-62.9
+# lonE = max(lons) #-60
+# latS = min(lats) #-63
+# latN = max(lats) #-60
 
 # fig = plt.figure(figsize=(20,10))
 # ax = fig.add_axes([0, 0, 1, 1], projection=ccrs.PlateCarree())
