@@ -154,6 +154,7 @@ def write_txt_statistics(files_df):
     file_stats_route = _RESULTS_FOLDER + "files_statisticaldata.txt"
     file_stats = open(file_stats_route, "w")
     file_stats.write("**********************" + os.linesep)
+    file_stats.write(f"Fecha del análisis: {str(pd.Timestamp.today())}" + os.linesep)
     file_stats.write(f"Número de archivos analizados: {len(files_df)}" + os.linesep)
     file_stats.write(f"Media de viajes por pinguino: {files_df.trip.mean()}" + os.linesep)
     file_stats.write("**********************")
@@ -167,7 +168,6 @@ def detect_velocity_outliers(penguin):
     penguin['outlier'] = (penguin['velocity'] >= mean + sigma3) | (penguin['velocity'] <= mean - sigma3) #element-wise | and &
     return penguin
 
-#%%
 
 def trajectory_analysis(file):
 
@@ -184,36 +184,33 @@ def trajectory_analysis(file):
 	penguin['trip'] = trip_number
 	penguin['peng_number'] = peng_number
 
-	# STEP 1
+	# STEP 1: boxplot velocity
 	save_boxplot(peng_number, trip_number, penguin, string = 'step1_nofiltered')
 	penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{1}.csv")
 
-	# STEP 2
+	# STEP 2: filtered velocity by max value
 	# Filter velocity=<0
 	penguin = penguin.loc[penguin.velocity > 0,:].reset_index() # retrocesos: eliminados, pero podrían afectar, ver si hay negativos
 	# Filter velocity>20
 	penguin = penguin.loc[penguin.velocity < 20,:].reset_index()
-	# Outlier detection and removal
+	# Outlier detection
 	save_boxplot(peng_number, trip_number, penguin, string = 'step2_filtered')
 	penguin = detect_velocity_outliers(penguin)
 	penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{2}.csv")
 
-	# STEP 3
+	# STEP 3: Outlier removal
 	penguin_out = penguin.loc[penguin.outlier !=True,:]
 	save_boxplot(peng_number, trip_number, penguin_out, string = 'step3_withoutoutliers')
 	penguin_out.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{3}.csv")
 
-
-	# Filtro de datos minutales a menor resolución temporal: promedio temporal media móvil
-
-
-
-
+    # STEP 4: downgrade temporal resolution
+	# Filtro de datos minutales a menor resolución temporal: promedio temporal con la media
+    # series.resample('3T').sum() -> series.resample('1T', on = 'datetime').mean()
+    # penguin_out.resample('1T', axis=0, on='datetime').mean()
 
 
-
-
-	#%% Track
+#%% Track
+def plot_track(penguin):
 
 	lons = penguin ['lon']
 	lats = penguin ['lat']
@@ -221,10 +218,10 @@ def trajectory_analysis(file):
 	track = sgeom.LineString(zip(lons, lats))
 
 	#%% Plot
-	lonW = min(lons) #-62.9
-	lonE = max(lons) #-60
-	latS = min(lats) #-63
-	latN = max(lats) #-60
+	lonW = -61.5 #min(lons) 
+	lonE = -60.5 #max(lons)
+	latS = -63.5 #min(lats)
+	latN = -62.5 #max(lats)
 
 	fig = plt.figure()
 	ax = fig.add_axes([0, 0, 1, 1], projection=ccrs.PlateCarree())
@@ -243,6 +240,10 @@ def trajectory_analysis(file):
 
 	ax.add_geometries([track], ccrs.PlateCarree(),facecolor='none', edgecolor='red')
 	plt.savefig(_RESULTS_FOLDER +'figures/test.png')
+
+
+file = 'viaje2_newpeng03.csv'
+file = 'viaje2_newpeng03_nido75.csv'
 
 
 if __name__ == '__main__':
