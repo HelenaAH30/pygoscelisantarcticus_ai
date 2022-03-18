@@ -8,9 +8,11 @@ Created on Mon Nov  2 18:20:29 2020
 #%% Libraries
 from cmath import nan
 from itertools import groupby
+from multiprocessing import Process
 import os
 import math
 import glob
+from turtle import TurtleGraphicsError
 import numpy as np
 import pandas as pd
 import geopy.distance as gp
@@ -167,54 +169,42 @@ def detect_velocity_outliers(penguin):
 
 #%%
 
-files_list = glob.glob(_DATA_FOLDER+'*.csv')
+def trajectory_analysis(file):
 
-# statistical analysis
-files_df = compose_statscsv(files_list)
-save_barplot(files_df)
-write_txt_statistics(files_df)
+	# Parse data
+	penguin = load_data(file)
+	penguin = parse_dates(penguin)
+	penguin = calcule_velocity (penguin)
+
+	# Penguin data
+	trip_number = extract_trip_number(file)
+	peng_number = extract_peng_number(file)
+
+	# Add penguin data to dataframe
+	penguin['trip'] = trip_number
+	penguin['peng_number'] = peng_number
+
+	# STEP 1
+	save_boxplot(peng_number, trip_number, penguin, string = 'step1_nofiltered')
+	penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{1}.csv")
+
+	# STEP 2
+	# Filter velocity=<0
+	penguin = penguin.loc[penguin.velocity > 0,:].reset_index() # retrocesos: eliminados, pero podrían afectar, ver si hay negativos
+	# Filter velocity>20
+	penguin = penguin.loc[penguin.velocity < 20,:].reset_index()
+	# Outlier detection and removal
+	save_boxplot(peng_number, trip_number, penguin, string = 'step2_filtered')
+	penguin = detect_velocity_outliers(penguin)
+	penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{2}.csv")
+
+	# STEP 3
+	penguin_out = penguin.loc[penguin.outlier !=True,:]
+	save_boxplot(peng_number, trip_number, penguin_out, string = 'step3_withoutoutliers')
+	penguin_out.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{3}.csv")
 
 
-file = 'viaje2_newpeng03.csv'
-file = 'viaje2_newpeng03_nido75.csv'
-
-# from multiprocessing import Pool
-
-# if __name__ == '__main__':
-#     pool = Pool(processes=6) # max RAM used = 9Gbs, 62,7/9 = 6.9067
-#     pool.map(function, args)
-
-# Parse data
-penguin = load_data(file)
-penguin = parse_dates(penguin)
-penguin = calcule_velocity (penguin)
-
-# Penguin data
-trip_number = extract_trip_number(file)
-peng_number = extract_peng_number(file)
-
-# Add penguin data to dataframe
-penguin['trip'] = trip_number
-penguin['peng_number'] = peng_number
-
-# STEP 1
-save_boxplot(peng_number, trip_number, penguin, string = 'step1_nofiltered')
-penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{1}.csv")
-
-# STEP 2
-# Filter velocity=<0
-penguin = penguin.loc[penguin.velocity > 0,:].reset_index()
-# Filter velocity>20
-penguin = penguin.loc[penguin.velocity < 20,:].reset_index()
-# Outlier detection and removal
-save_boxplot(peng_number, trip_number, penguin, string = 'step2_filtered')
-penguin = detect_velocity_outliers(penguin)
-penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{2}.csv")
-
-# STEP 3
-penguin_out = penguin.loc[penguin.outlier !=True,:]
-save_boxplot(peng_number, trip_number, penguin_out, string = 'step3_withoutoutliers')
-penguin_out.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{3}.csv")
+	# Filtro de datos minutales a menor resolución temporal: promedio temporal media móvil
 
 
 
@@ -223,34 +213,53 @@ penguin_out.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}
 
 
 
+	#%% Track
 
-#%% Track
+	lons = penguin ['lon']
+	lats = penguin ['lat']
 
-lons = penguin ['lon']
-lats = penguin ['lat']
+	track = sgeom.LineString(zip(lons, lats))
 
-track = sgeom.LineString(zip(lons, lats))
+	#%% Plot
+	lonW = min(lons) #-62.9
+	lonE = max(lons) #-60
+	latS = min(lats) #-63
+	latN = max(lats) #-60
 
-#%% Plot
-lonW = min(lons) #-62.9
-lonE = max(lons) #-60
-latS = min(lats) #-63
-latN = max(lats) #-60
+	fig = plt.figure()
+	ax = fig.add_axes([0, 0, 1, 1], projection=ccrs.PlateCarree())
 
-fig = plt.figure()
-ax = fig.add_axes([0, 0, 1, 1], projection=ccrs.PlateCarree())
+	#ax1.contourf(lonSLA,latSLA,SLAmean_90, cmap='YlOrRd', extend='both', levels=cflevels)
 
-#ax1.contourf(lonSLA,latSLA,SLAmean_90, cmap='YlOrRd', extend='both', levels=cflevels)
+	ax.set_extent([lonW, lonE, latS, latN])
+	#ax.add_feature(cfeature.GSHHSFeature(levels = [5,6],scale='full',facecolor='silver'))
+	#ax.add_feature(cfeature.NaturalEarthFeature('physical', 'ne_10m_minor_islands_coastline', scale ='10m')) #ne_10m_minor_islands_coastline
+	ax.coastlines(resolution ='10m')
+	ax.set_xticks(np.arange(lonW,lonE,5), crs=ccrs.PlateCarree())
+	ax.set_yticks(np.arange(latS,latN,5), crs=ccrs.PlateCarree())
+	ax.set_title('Penguin track',fontsize=18)
+	ax.set_ylabel('Latitude',fontsize=16)
+	ax.set_xlabel('Longitude',fontsize=16)
 
-ax.set_extent([lonW, lonE, latS, latN])
-#ax.add_feature(cfeature.GSHHSFeature(levels = [5,6],scale='full',facecolor='silver'))
-#ax.add_feature(cfeature.NaturalEarthFeature('physical', 'ne_10m_minor_islands_coastline', scale ='10m')) #ne_10m_minor_islands_coastline
-ax.coastlines(resolution ='10m')
-ax.set_xticks(np.arange(lonW,lonE,5), crs=ccrs.PlateCarree())
-ax.set_yticks(np.arange(latS,latN,5), crs=ccrs.PlateCarree())
-ax.set_title('Penguin track',fontsize=18)
-ax.set_ylabel('Latitude',fontsize=16)
-ax.set_xlabel('Longitude',fontsize=16)
+	ax.add_geometries([track], ccrs.PlateCarree(),facecolor='none', edgecolor='red')
+	plt.savefig(_RESULTS_FOLDER +'figures/test.png')
 
-ax.add_geometries([track], ccrs.PlateCarree(),facecolor='none', edgecolor='red')
-plt.savefig(_RESULTS_FOLDER +'figures/test.png')
+
+if __name__ == '__main__':
+
+	files_list = glob.glob(_DATA_FOLDER+'*.csv')
+
+	procs = [] #list to save the PID of the processes created
+
+	# statistical analysis
+	files_df = compose_statscsv(files_list)
+	save_barplot(files_df)
+	write_txt_statistics(files_df)
+
+	for file in files_list:
+		p = Process(target=trajectory_analysis, args=(file,))
+		procs.append(p)
+		p.start()
+
+	for p in procs:
+		p.join()
