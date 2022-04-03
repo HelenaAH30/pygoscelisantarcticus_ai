@@ -32,9 +32,8 @@ _NEWDATA_FOLDER = './results_peng/new_data/'
 
 #%% Functions
 
-def load_data(file):
+def load_data(filename):
     # Loading data
-    filename = _DATA_FOLDER + file
     penguin = pd.read_csv(filename, delim_whitespace=True, lineterminator='\n', header=None)
     # Rename columns
     penguin = penguin.rename(columns= {0:"name", 1:"date",2:"time", 3:"undef1", 4:"undef2",
@@ -42,6 +41,7 @@ def load_data(file):
                              9:"lon", 10:"lat", 11:"undef4",  12:"undef5",
                              13:"undef6", 14:"undef7", 15:"undef8", 16: "volt"})
     # Select useful columns
+    #try
     penguin = penguin [["name", "date", "time", "depth", "temp", "lon", "lat"]]
     return penguin
 
@@ -88,20 +88,12 @@ def calcule_velocity (penguin):
 
 
 def extract_trip_number(filename):
-    if len(filename) == 27:
-        filename = filename [0:-11]
-    else:
-        filename = filename[21:-11] # TODO: change!!
-    trip_number = int(filename.split('_')[0].split('viaje')[1])
+    trip_number = int(filename.split('/')[-1].split('_')[0].split('viaje')[1])
     return trip_number
 
 
 def extract_peng_number(filename):
-    if len(filename) == 27:
-        filename = filename [0:-11]
-    else:
-        filename = filename[21:-11] # TODO: change!!
-    peng_number = int(filename.split('_')[1].split('.')[0].split('newpeng')[1])
+    peng_number = int(filename.split('/')[-1].split('_')[1].split('.')[0].split('newpeng')[1])
     return peng_number
 
 
@@ -175,7 +167,7 @@ def _plot_track(penguin, dataset ='test'):
 
 	track = sgeom.LineString(zip(lons, lats))
 
-	# Plot
+	#%% Plot
 	lonW = -63.5 #min(lons) 
 	lonE = -60.5 #max(lons)
 	latS = -63.5 #min(lats)
@@ -217,9 +209,9 @@ def trajectory_analysis(file):
 
 	# STEP 1: boxplot velocity
 	save_boxplot(peng_number, trip_number, penguin, string = 'step1_nofiltered')
-	penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{1}.csv")
-    string_dataset = 'npeng'+str(peng_number)+'_trip'+str(trip_number)+'_step1'
-    _plot_track(penguin, dataset = string_dataset)
+	title = f"penguin{peng_number:02}_trip{trip_number}_step{1}"
+	penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
+	_plot_track(penguin, dataset = "track_"+title)
 
 
 	# STEP 2: filtered velocity by max value
@@ -230,23 +222,26 @@ def trajectory_analysis(file):
 	# Outlier detection
 	save_boxplot(peng_number, trip_number, penguin, string = 'step2_filtered')
 	penguin = detect_velocity_outliers(penguin)
-	penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{2}.csv")
+	title = f"penguin{peng_number:02}_trip{trip_number}_step{2}"
+	penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
 
 
 	# STEP 3: Outlier removal
 	penguin_out = penguin.loc[penguin.outlier !=True,:]
 	save_boxplot(peng_number, trip_number, penguin_out, string = 'step3_withoutoutliers')
-	penguin_out.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{3}.csv")
+	title = f"penguin{peng_number:02}_trip{trip_number}_step{3}"
+	penguin_out.to_csv(_NEWDATA_FOLDER + title +".csv")
+
 
     # STEP 4: downgrade temporal resolution
 	# Filtro de datos minutales a menor resolución temporal: promedio temporal con la media
     # series.resample('3T').sum() -> series.resample('1T', on = 'datetime').mean()
     # 1T = 1 min, 5T = 5 min
-    penguin_out = penguin_out[['name', 'datetime', 'depth', 'temp', 'lon', 'lat', 'velocity', 'trip', 'peng_number']]
-    penguin_out = penguin_out.resample('5T', axis=0, on='datetime').mean()
-    penguin_out.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{4}.csv")
-    string_dataset = 'npeng'+str(peng_number)+'_trip'+str(trip_number)+'_step4'
-    _plot_track(penguin_out,dataset = string_dataset)
+	penguin_out = penguin_out[['name', 'datetime', 'depth', 'temp', 'lon', 'lat', 'velocity', 'trip', 'peng_number']]
+	penguin_out = penguin_out.resample('5T', axis=0, on='datetime').mean()
+	title = f"penguin{peng_number:02}_trip{trip_number}_step{4}"
+	penguin_out.to_csv(_NEWDATA_FOLDER + title + ".csv")
+	_plot_track(penguin_out,dataset = "track_"+title)
 
 
 #file = 'viaje2_newpeng03.csv'
@@ -255,7 +250,7 @@ def trajectory_analysis(file):
 
 if __name__ == '__main__':
 
-	files_list = glob.glob(_DATA_FOLDER+'*.csv')
+	files_list = glob.glob(_DATA_FOLDER+'viaje*.csv')
 
 	procs = [] #list to save the PID of the processes created
 
@@ -264,8 +259,8 @@ if __name__ == '__main__':
 	save_barplot(files_df)
 	write_txt_statistics(files_df)
 
-    # multiplot
-
+	# TODO: delete: 
+	files_list = glob.glob(_DATA_FOLDER+'viaje2_newpeng03_nido75.csv')
 	for file in files_list:
 		p = Process(target=trajectory_analysis, args=(file,))
 		procs.append(p)
