@@ -10,9 +10,7 @@ from cmath import nan
 from itertools import groupby
 from multiprocessing import Process
 import os
-import math
 import glob
-from turtle import TurtleGraphicsError
 import numpy as np
 import pandas as pd
 import geopy.distance as gp
@@ -169,6 +167,38 @@ def detect_velocity_outliers(penguin):
     return penguin
 
 
+# Track
+def _plot_track(penguin, dataset ='test'):
+
+	lons = penguin ['lon']
+	lats = penguin ['lat']
+
+	track = sgeom.LineString(zip(lons, lats))
+
+	# Plot
+	lonW = -63.5 #min(lons) 
+	lonE = -60.5 #max(lons)
+	latS = -63.5 #min(lats)
+	latN = -60.5 #max(lats)
+
+	fig = plt.figure()
+	ax = fig.add_axes([0, 0, 1, 1], projection=ccrs.PlateCarree()) #ccrs.SouthPolarStereo()
+
+	#ax1.contourf(lonSLA,latSLA,SLAmean_90, cmap='YlOrRd', extend='both', levels=cflevels)
+
+	ax.set_extent([lonW, lonE, latS, latN])
+	ax.add_feature(cfeature.GSHHSFeature(levels = [1,2,3,4],scale='full',facecolor='silver'), zorder=100)
+	ax.add_feature(cfeature.NaturalEarthFeature('physical', 'minor_islands_coastline', scale ='10m'), zorder=101) #ne_10m_minor_islands_coastline
+	#ax.coastlines(resolution ='10m', zorder=100)
+	ax.set_xticks(np.arange(lonW,lonE,5), crs=ccrs.PlateCarree())
+	ax.set_yticks(np.arange(latS,latN,5), crs=ccrs.PlateCarree())
+	ax.set_title('Penguin track',fontsize=18)
+	ax.set_ylabel('Latitude',fontsize=16)
+	ax.set_xlabel('Longitude',fontsize=16)
+	ax.add_geometries([track], ccrs.PlateCarree(),facecolor='none', edgecolor='red', zorder =10)
+	plt.savefig(_RESULTS_FOLDER +'figures/'+dataset+'.png')
+
+
 def trajectory_analysis(file):
 
 	# Parse data
@@ -184,19 +214,24 @@ def trajectory_analysis(file):
 	penguin['trip'] = trip_number
 	penguin['peng_number'] = peng_number
 
+
 	# STEP 1: boxplot velocity
 	save_boxplot(peng_number, trip_number, penguin, string = 'step1_nofiltered')
 	penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{1}.csv")
+    string_dataset = 'npeng'+str(peng_number)+'_trip'+str(trip_number)+'_step1'
+    _plot_track(penguin, dataset = string_dataset)
+
 
 	# STEP 2: filtered velocity by max value
 	# Filter velocity=<0
-	penguin = penguin.loc[penguin.velocity > 0,:].reset_index() # retrocesos: eliminados, pero podrían afectar, ver si hay negativos
+	penguin = penguin.loc[penguin.velocity > 0,:].reset_index(drop=True) # retrocesos: eliminados, pero podrían afectar, ver si hay negativos
 	# Filter velocity>20
-	penguin = penguin.loc[penguin.velocity < 20,:].reset_index()
+	penguin = penguin.loc[penguin.velocity < 20,:].reset_index(drop=True)
 	# Outlier detection
 	save_boxplot(peng_number, trip_number, penguin, string = 'step2_filtered')
 	penguin = detect_velocity_outliers(penguin)
 	penguin.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{2}.csv")
+
 
 	# STEP 3: Outlier removal
 	penguin_out = penguin.loc[penguin.outlier !=True,:]
@@ -206,44 +241,16 @@ def trajectory_analysis(file):
     # STEP 4: downgrade temporal resolution
 	# Filtro de datos minutales a menor resolución temporal: promedio temporal con la media
     # series.resample('3T').sum() -> series.resample('1T', on = 'datetime').mean()
-    # penguin_out.resample('1T', axis=0, on='datetime').mean()
+    # 1T = 1 min, 5T = 5 min
+    penguin_out = penguin_out[['name', 'datetime', 'depth', 'temp', 'lon', 'lat', 'velocity', 'trip', 'peng_number']]
+    penguin_out = penguin_out.resample('5T', axis=0, on='datetime').mean()
+    penguin_out.to_csv(_NEWDATA_FOLDER + f"penguin{peng_number:02}_trip{trip_number}_step{4}.csv")
+    string_dataset = 'npeng'+str(peng_number)+'_trip'+str(trip_number)+'_step4'
+    _plot_track(penguin_out,dataset = string_dataset)
 
 
-#%% Track
-def plot_track(penguin):
-
-	lons = penguin ['lon']
-	lats = penguin ['lat']
-
-	track = sgeom.LineString(zip(lons, lats))
-
-	#%% Plot
-	lonW = -61.5 #min(lons) 
-	lonE = -60.5 #max(lons)
-	latS = -63.5 #min(lats)
-	latN = -62.5 #max(lats)
-
-	fig = plt.figure()
-	ax = fig.add_axes([0, 0, 1, 1], projection=ccrs.PlateCarree())
-
-	#ax1.contourf(lonSLA,latSLA,SLAmean_90, cmap='YlOrRd', extend='both', levels=cflevels)
-
-	ax.set_extent([lonW, lonE, latS, latN])
-	#ax.add_feature(cfeature.GSHHSFeature(levels = [5,6],scale='full',facecolor='silver'))
-	#ax.add_feature(cfeature.NaturalEarthFeature('physical', 'ne_10m_minor_islands_coastline', scale ='10m')) #ne_10m_minor_islands_coastline
-	ax.coastlines(resolution ='10m')
-	ax.set_xticks(np.arange(lonW,lonE,5), crs=ccrs.PlateCarree())
-	ax.set_yticks(np.arange(latS,latN,5), crs=ccrs.PlateCarree())
-	ax.set_title('Penguin track',fontsize=18)
-	ax.set_ylabel('Latitude',fontsize=16)
-	ax.set_xlabel('Longitude',fontsize=16)
-
-	ax.add_geometries([track], ccrs.PlateCarree(),facecolor='none', edgecolor='red')
-	plt.savefig(_RESULTS_FOLDER +'figures/test.png')
-
-
-file = 'viaje2_newpeng03.csv'
-file = 'viaje2_newpeng03_nido75.csv'
+#file = 'viaje2_newpeng03.csv'
+#file = 'viaje2_newpeng03_nido75.csv'
 
 
 if __name__ == '__main__':
@@ -256,6 +263,8 @@ if __name__ == '__main__':
 	files_df = compose_statscsv(files_list)
 	save_barplot(files_df)
 	write_txt_statistics(files_df)
+
+    # multiplot
 
 	for file in files_list:
 		p = Process(target=trajectory_analysis, args=(file,))
