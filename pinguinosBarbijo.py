@@ -28,6 +28,7 @@ os.chdir('/home/helena/Documents')
 _DATA_FOLDER = './nombres_unificados/'
 _RESULTS_FOLDER = './results_peng/'
 _NEWDATA_FOLDER = './results_peng/new_data/'
+_LOGS_FOLDER = './logs/'
 
 
 #%% Functions
@@ -149,6 +150,16 @@ def write_txt_statistics(files_df):
     file_stats.write(f"Media de viajes por pinguino: {files_df.trip.mean()}" + os.linesep)
     file_stats.write("**********************")
     file_stats.close()
+
+
+def write_log(file, step, error, file_log, today):
+    file_log.write("**********************" + os.linesep)
+    file_log.write(f"Fecha del análisis: {today}" + os.linesep)
+    file_log.write(f"Fichero: {file}" + os.linesep)
+    file_log.write(f"Paso: {step}" + os.linesep)
+    file_log.write(f"Error: {error}" + os.linesep)
+    file_log.write("**********************")
+    file_log.close()
    
 
 def detect_velocity_outliers(penguin):
@@ -192,56 +203,73 @@ def _plot_track(penguin, dataset ='test'):
 
 
 def trajectory_analysis(file):
+    # Open log
+	today = pd.Timestamp.today().dt.strftime('%Y/%m/%d')
+	file_log_route = _LOGS_FOLDER + "log_{file}_{today}.txt"
+	file_log = open(file_log_route, "w")
 
-	# Parse data
-	penguin = load_data(file)
-	penguin = parse_dates(penguin)
-	penguin = calcule_velocity (penguin)
+	try:
+		# Parse data
+		step = 'parse_data'
+		penguin = load_data(file)
+		penguin = parse_dates(penguin)
+		penguin = calcule_velocity (penguin)
 
-	# Penguin data
-	trip_number = extract_trip_number(file)
-	peng_number = extract_peng_number(file)
+		# Penguin data
+		step = 'penguin_data'
+		trip_number = extract_trip_number(file)
+		peng_number = extract_peng_number(file)
 
-	# Add penguin data to dataframe
-	penguin['trip'] = trip_number
-	penguin['peng_number'] = peng_number
-
-
-	# STEP 1: boxplot velocity
-	save_boxplot(peng_number, trip_number, penguin, string = 'step1_nofiltered')
-	title = f"penguin{peng_number:02}_trip{trip_number}_step{1}"
-	penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
-	_plot_track(penguin, dataset = "track_"+title)
-
-
-	# STEP 2: filtered velocity by max value
-	# Filter velocity=<0
-	penguin = penguin.loc[penguin.velocity > 0,:].reset_index(drop=True) # retrocesos: eliminados, pero podrían afectar, ver si hay negativos
-	# Filter velocity>20
-	penguin = penguin.loc[penguin.velocity < 20,:].reset_index(drop=True)
-	# Outlier detection
-	save_boxplot(peng_number, trip_number, penguin, string = 'step2_filtered')
-	penguin = detect_velocity_outliers(penguin)
-	title = f"penguin{peng_number:02}_trip{trip_number}_step{2}"
-	penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
+		# Add penguin data to dataframe
+		penguin['trip'] = trip_number
+		penguin['peng_number'] = peng_number
 
 
-	# STEP 3: Outlier removal
-	penguin_out = penguin.loc[penguin.outlier !=True,:]
-	save_boxplot(peng_number, trip_number, penguin_out, string = 'step3_withoutoutliers')
-	title = f"penguin{peng_number:02}_trip{trip_number}_step{3}"
-	penguin_out.to_csv(_NEWDATA_FOLDER + title +".csv")
+		# STEP 1: boxplot velocity
+		step = 'step_1'
+		save_boxplot(peng_number, trip_number, penguin, string = 'step1_nofiltered')
+		title = f"penguin{peng_number:02}_trip{trip_number}_step{1}"
+		penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
+		_plot_track(penguin, dataset = "track_"+title)
 
 
-    # STEP 4: downgrade temporal resolution
-	# Filtro de datos minutales a menor resolución temporal: promedio temporal con la media
-    # series.resample('3T').sum() -> series.resample('1T', on = 'datetime').mean()
-    # 1T = 1 min, 5T = 5 min
-	penguin_out = penguin_out[['name', 'datetime', 'depth', 'temp', 'lon', 'lat', 'velocity', 'trip', 'peng_number']]
-	penguin_out = penguin_out.resample('5T', axis=0, on='datetime').mean()
-	title = f"penguin{peng_number:02}_trip{trip_number}_step{4}"
-	penguin_out.to_csv(_NEWDATA_FOLDER + title + ".csv")
-	_plot_track(penguin_out,dataset = "track_"+title)
+		# STEP 2: filtered velocity by max value
+		step = 'step_2'
+		# Filter velocity=<0
+		penguin = penguin.loc[penguin.velocity > 0,:].reset_index(drop=True) # retrocesos: eliminados, pero podrían afectar, ver si hay negativos
+		# Filter velocity>20
+		penguin = penguin.loc[penguin.velocity < 20,:].reset_index(drop=True)
+		# Outlier detection
+		save_boxplot(peng_number, trip_number, penguin, string = 'step2_filtered')
+		penguin = detect_velocity_outliers(penguin)
+		title = f"penguin{peng_number:02}_trip{trip_number}_step{2}"
+		penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
+
+
+		# STEP 3: Outlier removal
+		step = 'step_3'
+		penguin_out = penguin.loc[penguin.outlier !=True,:]
+		save_boxplot(peng_number, trip_number, penguin_out, string = 'step3_withoutoutliers')
+		title = f"penguin{peng_number:02}_trip{trip_number}_step{3}"
+		penguin_out.to_csv(_NEWDATA_FOLDER + title +".csv")
+
+
+		# STEP 4: downgrade temporal resolution
+		step = 'step_4'
+		# Filtro de datos minutales a menor resolución temporal: promedio temporal con la media
+		# series.resample('3T').sum() -> series.resample('1T', on = 'datetime').mean()
+		# 1T = 1 min, 5T = 5 min
+		penguin_out = penguin_out[['name', 'datetime', 'depth', 'temp', 'lon', 'lat', 'velocity', 'trip', 'peng_number']]
+		penguin_out = penguin_out.resample('5T', axis=0, on='datetime').mean()
+		title = f"penguin{peng_number:02}_trip{trip_number}_step{4}"
+		penguin_out.to_csv(_NEWDATA_FOLDER + title + ".csv")
+		_plot_track(penguin_out,dataset = "track_"+title)
+		
+        # Cierre y borrado del archivo logs si no hay error
+		file_log.close()
+		os.remove("demofile.txt")
+	except Exception as error:
+		write_log(file, step, error, file_log, today)
 
 
 #file = 'viaje2_newpeng03.csv'
