@@ -9,6 +9,7 @@ Created on Mon Nov  2 18:20:29 2020
 from cmath import nan
 from itertools import groupby
 from multiprocessing import Process
+
 import os
 import glob
 import numpy as np
@@ -39,7 +40,7 @@ def load_data(filename):
     # Rename columns
     penguin = penguin.rename(columns= {0:"name", 1:"date",2:"time", 3:"undef1", 4:"undef2",
                              5:"undef3", 6:"active_dry", 7:"depth", 8:"temp",
-                             9:"lon", 10:"lat", 11:"undef4",  12:"undef5",
+                             9:"lat", 10:"lon", 11:"undef4",  12:"undef5",
                              13:"undef6", 14:"undef7", 15:"undef8", 16: "volt"})
     # Select useful columns
     #try
@@ -175,37 +176,43 @@ def _plot_track(penguin, dataset ='test'):
 
 	lons = penguin ['lon']
 	lats = penguin ['lat']
+	num = penguin.loc[0,'peng_number']
+	trip = penguin.loc[0,'trip']
 
-	track = sgeom.LineString(zip(lons, lats))
+	track = sgeom.LineString(zip(lons, lats)) 
+
+    # generate np.meshgrid(lon,lat)
 
 	#%% Plot
-	lonW = -63.5 #min(lons) 
-	lonE = -60.5 #max(lons)
-	latS = -63.5 #min(lats)
-	latN = -60.5 #max(lats)
+	lonW = -61.1 #min(lons) 
+	lonE = -60.30 #max(lons)
+	latS = -63.3 #min(lats)
+	latN = -62.75 #max(lats)
 
 	fig = plt.figure()
-	ax = fig.add_axes([0, 0, 1, 1], projection=ccrs.PlateCarree()) #ccrs.SouthPolarStereo()
-
+	ax = plt.axes(projection=ccrs.PlateCarree()) #ccrs.SouthPolarStereo()
+	plt.scatter(x=lons, y=lats)
 	#ax1.contourf(lonSLA,latSLA,SLAmean_90, cmap='YlOrRd', extend='both', levels=cflevels)
 
 	ax.set_extent([lonW, lonE, latS, latN])
-	ax.add_feature(cfeature.GSHHSFeature(levels = [1,2,3,4],scale='full',facecolor='silver'), zorder=100)
+	ax.add_feature(cfeature.GSHHSFeature(levels = [1,2,3,4],scale='10m',facecolor='silver'), zorder=100)
 	ax.add_feature(cfeature.NaturalEarthFeature('physical', 'minor_islands_coastline', scale ='10m'), zorder=101) #ne_10m_minor_islands_coastline
-	#ax.coastlines(resolution ='10m', zorder=100)
-	ax.set_xticks(np.arange(lonW,lonE,5), crs=ccrs.PlateCarree())
-	ax.set_yticks(np.arange(latS,latN,5), crs=ccrs.PlateCarree())
-	ax.set_title('Penguin track',fontsize=18)
-	ax.set_ylabel('Latitude',fontsize=16)
-	ax.set_xlabel('Longitude',fontsize=16)
-	ax.add_geometries([track], ccrs.PlateCarree(),facecolor='none', edgecolor='red', zorder =10)
+	ax.coastlines(resolution ='10m', zorder=100)
+	ax.set_xticks(np.round(np.linspace(lonW,lonE,10),2), crs=ccrs.PlateCarree())
+	ax.set_yticks(np.round(np.linspace(latS,latN,10),2), crs=ccrs.PlateCarree())
+	ax.set_title(f'Penguin {num} trip {trip}',fontsize=12)
+	ax.set_ylabel('Latitude',fontsize=12)
+	ax.set_xlabel('Longitude',fontsize=12)
+	ax.add_geometries([track], ccrs.PlateCarree(),facecolor='none', edgecolor='blue', zorder =10)
 	plt.savefig(_RESULTS_FOLDER +'figures/'+dataset+'.png')
+	#plt.savefig('test.png')
 
 
 def trajectory_analysis(file):
     # Open log
-	today = pd.Timestamp.today().dt.strftime('%Y/%m/%d')
-	file_log_route = _LOGS_FOLDER + "log_{file}_{today}.txt"
+	today = pd.Timestamp.today().strftime('%Y%m%d')
+
+	file_log_route = _LOGS_FOLDER + f"log_{file.split('/')[-1].split('.')[0]}_{today}.txt"
 	file_log = open(file_log_route, "w")
 
 	try:
@@ -244,6 +251,7 @@ def trajectory_analysis(file):
 		penguin = detect_velocity_outliers(penguin)
 		title = f"penguin{peng_number:02}_trip{trip_number}_step{2}"
 		penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
+		_plot_track(penguin, dataset = "track_"+title)
 
 
 		# STEP 3: Outlier removal
@@ -252,6 +260,7 @@ def trajectory_analysis(file):
 		save_boxplot(peng_number, trip_number, penguin_out, string = 'step3_withoutoutliers')
 		title = f"penguin{peng_number:02}_trip{trip_number}_step{3}"
 		penguin_out.to_csv(_NEWDATA_FOLDER + title +".csv")
+		_plot_track(penguin_out, dataset = "track_"+title)
 
 
 		# STEP 4: downgrade temporal resolution
@@ -267,7 +276,7 @@ def trajectory_analysis(file):
 		
         # Cierre y borrado del archivo logs si no hay error
 		file_log.close()
-		os.remove("demofile.txt")
+		os.remove(file_log_route)
 	except Exception as error:
 		write_log(file, step, error, file_log, today)
 
@@ -288,7 +297,7 @@ if __name__ == '__main__':
 	write_txt_statistics(files_df)
 
 	# TODO: delete: 
-	files_list = glob.glob(_DATA_FOLDER+'viaje2_newpeng03_nido75.csv')
+	# files_list = glob.glob(_DATA_FOLDER+'viaje2_newpeng03_nido75.csv')
 	for file in files_list:
 		p = Process(target=trajectory_analysis, args=(file,))
 		procs.append(p)
