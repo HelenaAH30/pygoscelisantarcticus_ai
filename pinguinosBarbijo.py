@@ -12,6 +12,7 @@ from multiprocessing import Process
 
 import os
 import glob
+import math
 import numpy as np
 import pandas as pd
 import geopy.distance as gp
@@ -23,6 +24,9 @@ import cartopy.feature as cfeature
 import cartopy.crs as ccrs
 
 import shapely.geometry as sgeom
+
+from sklearn.model_selection import train_test_split
+
 #%%Configuration
 # os.chdir('/Volumes/MUSI-HAH/TFM/penguin_data/nombres_unificados/')
 os.chdir('/home/helena/Documents')
@@ -35,6 +39,10 @@ _LOGS_FOLDER = './logs/'
 #%% Functions
 
 def load_data(filename):
+    """ Load data from file
+    :param filename: (str) file name
+    :return: pandas dataframe
+    """
     # Loading data
     penguin = pd.read_csv(filename, delim_whitespace=True, lineterminator='\n', header=None)
     # Rename columns
@@ -49,6 +57,10 @@ def load_data(filename):
 
 
 def parse_dates(penguin):
+    """ Parse dates to datetime format
+    :param penguin: pandas dataframe
+    :return: pandas dataframe parsed
+    """
     # Parse dates
     penguin ['datetime'] = penguin['date'] + ' ' + penguin['time']
     penguin ['datetime'] = pd.to_datetime(penguin['datetime'], format='%d/%m/%Y %H:%M:%S.%f')
@@ -56,6 +68,12 @@ def parse_dates(penguin):
 
 
 def _distance_btwn_lonlatpoints(lon_1, lat_1, lon_2, lat_2):
+    """ Calculate distance between two points
+    :param lon_1: (float) longitude of point 1
+    :param lat_1: (float) latitude of point 1
+    :param lon_2: (float) longitude of point 2
+    :param lat_2: (float) latitude of point 2
+    :return: (float) distance between points"""
     coords_1 = (lat_1,lon_1)
     coords_2 = (lat_2,lon_2)
     try:
@@ -67,42 +85,129 @@ def _distance_btwn_lonlatpoints(lon_1, lat_1, lon_2, lat_2):
     
 
 def _replace_lat_outofrange(penguin):
-    """
+    """ Replace latitudes out of range
     There was values == -244.03267
+    :param penguin: pandas dataframe
+    :return: pandas dataframe with latitudes replaced
     """
     penguin.lat[(penguin.lat<-90) | (penguin.lat>90)] = np.nan
-
     return penguin
 
-def calcule_velocity (penguin):
+
+def calcule_speed (penguin):
+    """ Calculate speed
+    :param penguin: pandas dataframe with lat, lon, depth, temp, datetime
+    :return: pandas dataframe with speed"""
     # Calcule of time delta between points
     penguin['delta_time'] = penguin.datetime.diff()
     penguin['delta_time'] = penguin.apply(lambda row: row.delta_time.total_seconds(), axis=1)
-
     # Calcule spatial difference between points
     penguin = _replace_lat_outofrange(penguin)
     penguin.dropna(axis=0, how='any', inplace=True)
     penguin[['lon_shift', 'lat_shift']] = penguin[['lon', 'lat']].shift(periods=1)
     penguin['delta_space'] = penguin.apply(lambda row: _distance_btwn_lonlatpoints(row.lon, row.lat, row.lon_shift, row.lat_shift), axis=1)
-    #Calcule velotity column
-    penguin['velocity'] = penguin['delta_space']/penguin['delta_time']
+    #Calcule speed column
+    penguin['speed'] = penguin['delta_space']/penguin['delta_time']
+    return penguin
+
+
+def calcule_time_travel(penguin):
+    """ Calculate time travel
+    :param penguin: pandas dataframe with delta_time
+    :return: pandas dataframe with time travel"""
+    penguin['time_travel'] = penguin['delta_time'].cumsum()
+    return penguin
+
+
+def calcule_temperature_gradient(penguin, units='km'):
+    """ Calculate temperature gradient
+    :param penguin: pandas dataframe with temp and delta_space
+    :return: pandas dataframe with temperature gradient"""
+    # Calcule temperature difference between points
+    penguin['temp_delta'] = penguin.temp.diff()
+    # Calcule temperature gradient column
+    penguin['temp_gradient'] = penguin.apply(lambda row: row.temp_delta/row.delta_space, axis=1)
+    if units == 'km':
+        return penguin
+    elif units == 'm':
+        penguin['temp_gradient'] = penguin['temp_gradient']*1000
+        return penguin
+
+
+def _calcule_compass_direction(point_i, point_f):
+    """ Calculate compass direction
+    :param point_i: (tuple) longitude, latitude of point 1
+    :param point_f: (tuple) longitude, latitude of point 2
+    :return: (float) compass direction
+    """
+    lat1 = math.radians(point_i[0])
+    lat2 = math.radians(point_f[0])
+
+    delta_lon = math.radians(point_f[1] - point_i[1])
+
+    x = math.sin(delta_lon) * math.cos(lat2)
+    y = math.cos(lat1) * math.sin(lat2) - (math.sin(lat1)
+            * math.cos(lat2) * math.cos(delta_lon))
+
+    direction = math.atan2(x, y) #-180 to 180
+    direction = math.degrees(direction)
+    direction = (direction + 360) % 360
+    return direction
+
+
+def calcule_direction(penguin):
+    """ Calculate direction
+    :param penguin: pandas dataframe with lon, lat, depth, temp, datetime
+    :return: pandas dataframe with direction
+    """
+    # Calcule direction column
+    penguin['direction'] = penguin.apply(lambda row: _calcule_compass_direction((row.lon, row.lat), (row.lon_shift, row.lat_shift)), axis=1)
+    return penguin
+
+
+def normalize_direction(penguin):
+    """ Normalize direction
+    :param penguin: pandas dataframe with direction
+    :return: pandas dataframe with normalized direction
+    """
+    # Normalize direction column
+    penguin['direction'] = penguin['direction'] * (1/360)
     return penguin
 
 
 def extract_trip_number(filename):
+    """ Extract trip number from filename
+    :param filename: (str) file name
+    :return: (int) trip number
+    """
+    #trip_number = int(filename.split('/')[-1].split('_')[2].split('.')[0])
+    #return trip_number
     trip_number = int(filename.split('/')[-1].split('_')[0].split('viaje')[1])
     return trip_number
 
 
 def extract_peng_number(filename):
+    """ Extract penguin number from filename
+    :param filename: (str) file name
+    :return: (int) penguin number
+    """
+    #peng_number = int(filename.split('/')[-1].split('_')[0])
+    #return peng_number
     peng_number = int(filename.split('/')[-1].split('_')[1].split('.')[0].split('newpeng')[1])
     return peng_number
 
 
 def save_boxplot(penguin_number, trip_number, penguin_data, string = None):
+    """ Save boxplot of penguin data
+    :param penguin_number: (int) penguin number
+    :param trip_number: (int) trip number
+    :param penguin_data: (pandas dataframe) penguin data
+    :param string: (str) string to add to filename
+    :return: (str) path to saved file
+    """
     # plot
-    boxplot = sns.boxplot(x=penguin_data['velocity'])
-    boxplot.set_xlabel('Velocity (m/s)')
+    boxplot = sns.boxplot(x=penguin_data['speed'])
+    boxplot.set_xlabel('Speed (m/s)')
     boxplot.set(title = f'Penguin {penguin_number} - Trip {trip_number}')
     # create figure
     fig = boxplot.get_figure()
@@ -116,6 +221,10 @@ def save_boxplot(penguin_number, trip_number, penguin_data, string = None):
 
 
 def compose_statscsv(files_list):
+    """ Compose stats csv file
+    :param files_list: (list) list of files
+    :return: (str) path to saved file
+    """
     files_df = pd.DataFrame()
     files_df['files'] = files_list
     files_df['peng_number'] = files_df.apply(lambda row: extract_peng_number(row.files), axis=1)
@@ -126,9 +235,15 @@ def compose_statscsv(files_list):
 
 
 def save_barplot(df, string = None):
+    """ Save barplot of files per penguin
+    :param df: (pandas dataframe) files dataframe
+    :param string: (str) string to add to filename
+    """
     date = pd.to_datetime('today').strftime('%Y%m%d')
     # plot
-    barplot = sns.barplot(data = df, y = 'trip', x = df.index)
+    #sns.set_palette(sns.color_palette("viridis", as_cmap=True))
+    barplot = sns.barplot(data = df, y = 'trip', x = df.index, palette="viridis")
+    barplot.set_title('Trajectories per penguin',fontsize=12)
     barplot.set_xlabel('Penguin number')
     barplot.set_ylabel('Number of trips')
     # create figure
@@ -143,6 +258,8 @@ def save_barplot(df, string = None):
 
 
 def write_txt_statistics(files_df):
+    """ Write txt file with statistics
+    :param files_df: (pandas dataframe) files dataframe"""
     file_stats_route = _RESULTS_FOLDER + "files_statisticaldata.txt"
     file_stats = open(file_stats_route, "w")
     file_stats.write("**********************" + os.linesep)
@@ -154,6 +271,7 @@ def write_txt_statistics(files_df):
 
 
 def write_log(file, step, error, file_log, today):
+    """ Write log file"""
     file_log.write("**********************" + os.linesep)
     file_log.write(f"Fecha del análisis: {today}" + os.linesep)
     file_log.write(f"Fichero: {file}" + os.linesep)
@@ -163,122 +281,210 @@ def write_log(file, step, error, file_log, today):
     file_log.close()
    
 
-def detect_velocity_outliers(penguin):
-    mean = penguin['velocity'].mean()
-    sigma = penguin['velocity'].std()
+def detect_speed_outliers(penguin):
+    """ Detect outliers in speed
+    :param penguin: (pandas dataframe) penguin data with speed column
+    :return: (pandas dataframe) penguin data with outliers removed
+    """
+    mean = penguin['speed'].mean()
+    sigma = penguin['speed'].std()
     sigma3 = 3*sigma
-    penguin['outlier'] = (penguin['velocity'] >= mean + sigma3) | (penguin['velocity'] <= mean - sigma3) #element-wise | and &
+    penguin['outlier'] = (penguin['speed'] >= mean + sigma3) | (penguin['speed'] <= mean - sigma3) #element-wise | and &
     return penguin
 
 
 # Track
 def _plot_track(penguin, dataset ='test'):
-
-	lons = penguin ['lon']
-	lats = penguin ['lat']
-	num = penguin.loc[0,'peng_number']
-	trip = penguin.loc[0,'trip']
-
-	track = sgeom.LineString(zip(lons, lats)) 
-
-    # generate np.meshgrid(lon,lat)
-
-	#%% Plot
-	lonW = -61.1 #min(lons) 
-	lonE = -60.30 #max(lons)
-	latS = -63.3 #min(lats)
-	latN = -62.75 #max(lats)
-
-	fig = plt.figure()
-	ax = plt.axes(projection=ccrs.PlateCarree()) #ccrs.SouthPolarStereo()
-	plt.scatter(x=lons, y=lats)
-	#ax1.contourf(lonSLA,latSLA,SLAmean_90, cmap='YlOrRd', extend='both', levels=cflevels)
-
-	ax.set_extent([lonW, lonE, latS, latN])
-	ax.add_feature(cfeature.GSHHSFeature(levels = [1,2,3,4],scale='10m',facecolor='silver'), zorder=100)
-	ax.add_feature(cfeature.NaturalEarthFeature('physical', 'minor_islands_coastline', scale ='10m'), zorder=101) #ne_10m_minor_islands_coastline
-	ax.coastlines(resolution ='10m', zorder=100)
-	ax.set_xticks(np.round(np.linspace(lonW,lonE,10),2), crs=ccrs.PlateCarree())
-	ax.set_yticks(np.round(np.linspace(latS,latN,10),2), crs=ccrs.PlateCarree())
-	ax.set_title(f'Penguin {num} trip {trip}',fontsize=12)
-	ax.set_ylabel('Latitude',fontsize=12)
-	ax.set_xlabel('Longitude',fontsize=12)
-	ax.add_geometries([track], ccrs.PlateCarree(),facecolor='none', edgecolor='blue', zorder =10)
-	plt.savefig(_RESULTS_FOLDER +'figures/'+dataset+'.png')
-	#plt.savefig('test.png')
+    """ Plot track
+    :param penguin: (pandas dataframe) penguin data
+    :param dataset: (str) dataset name
+    """
+    # Penguin params
+    lons = penguin ['lon']
+    lats = penguin ['lat']
+    num = penguin.loc[1,'peng_number']
+    trip = penguin.loc[1,'trip']
+    depth = penguin ['depth']
+    #%% Plot configuration
+    lonW = -61.167 #min(lons) 
+    lonE = -60.50 #max(lons)
+    latS = -63.3 #min(lats)
+    latN = -62.75 #max(lats)
+    ## Axes
+    fig = plt.figure()
+    ax = plt.axes(projection=ccrs.PlateCarree()) #ccrs.SouthPolarStereo()
+    ax.set_extent([lonW, lonE, latS, latN])
+    ## Track plot
+    points = plt.scatter(x=lons, y=lats, c= depth, cmap='viridis', s=0.1, marker='o')
+    ## Coastlines
+    ax.add_feature(cfeature.GSHHSFeature(levels = [1,2,3,4],scale='full',facecolor='silver'), zorder=100)
+    ## Layout
+    plt.colorbar(label="Depth (m)", orientation="vertical")
+    ax.set_xticks(np.round(np.linspace(lonW,lonE,5),2), crs=ccrs.PlateCarree())
+    ax.set_yticks(np.round(np.linspace(latS,latN,10),2), crs=ccrs.PlateCarree())
+    ax.set_title(f'Penguin number: {num} - trip: {trip}',fontsize=12)
+    ax.set_ylabel('Latitude',fontsize=12)
+    ax.set_xlabel('Longitude',fontsize=12)
+    ## Save figure
+    plt.savefig(_RESULTS_FOLDER +'figures/'+dataset+'.png', dpi=500) # resolution = 300 dpi
+    # TODO: delete plt.savefig('test.png')
+    ## Close figure
+    plt.close(fig)
 
 
 def trajectory_analysis(file):
+    """ Trajectory analysis
+    :param file: (str) file name
+    """
     # Open log
-	today = pd.Timestamp.today().strftime('%Y%m%d')
-
-	file_log_route = _LOGS_FOLDER + f"log_{file.split('/')[-1].split('.')[0]}_{today}.txt"
-	file_log = open(file_log_route, "w")
-
-	try:
-		# Parse data
-		step = 'parse_data'
-		penguin = load_data(file)
-		penguin = parse_dates(penguin)
-		penguin = calcule_velocity (penguin)
-
-		# Penguin data
-		step = 'penguin_data'
-		trip_number = extract_trip_number(file)
-		peng_number = extract_peng_number(file)
-
-		# Add penguin data to dataframe
-		penguin['trip'] = trip_number
-		penguin['peng_number'] = peng_number
+    today = pd.Timestamp.today().strftime('%Y%m%d')
+    file_log_route = _LOGS_FOLDER + f"log_{file.split('/')[-1].split('.')[0]}_{today}.txt"
+    file_log = open(file_log_route, "w")
+    try:
+        # Parse data
+        step = 'parse_data'
+        penguin = load_data(file)
+        penguin = parse_dates(penguin)
+        # Penguin data
+        step = 'penguin_data'
+        trip_number = extract_trip_number(file)
+        peng_number = extract_peng_number(file)
+        # Add penguin data to dataframe
+        penguin['trip'] = trip_number
+        penguin['peng_number'] = peng_number
+        title = f"penguin{peng_number:02}_trip{trip_number}_step{step}"
+        penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
 
 
-		# STEP 1: boxplot velocity
-		step = 'step_1'
-		save_boxplot(peng_number, trip_number, penguin, string = 'step1_nofiltered')
-		title = f"penguin{peng_number:02}_trip{trip_number}_step{1}"
-		penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
-		_plot_track(penguin, dataset = "track_"+title)
+        """
+        STEP 0: filtered depth by value
+        The depth>5m is filtered.
+        When the penguin reached this depth we can say that it's fishing.
+        """
+        step = 'step_0'
+        penguin = penguin.loc[penguin.depth < 5,:].reset_index(drop=True)
+        title = f"penguin{peng_number:02}_trip{trip_number}_step{0}"
+        penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
 
 
-		# STEP 2: filtered velocity by max value
-		step = 'step_2'
-		# Filter velocity=<0
-		penguin = penguin.loc[penguin.velocity > 0,:].reset_index(drop=True) # retrocesos: eliminados, pero podrían afectar, ver si hay negativos
-		# Filter velocity>20
-		penguin = penguin.loc[penguin.velocity < 20,:].reset_index(drop=True)
-		# Outlier detection
-		save_boxplot(peng_number, trip_number, penguin, string = 'step2_filtered')
-		penguin = detect_velocity_outliers(penguin)
-		title = f"penguin{peng_number:02}_trip{trip_number}_step{2}"
-		penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
-		_plot_track(penguin, dataset = "track_"+title)
+        """
+        STEP 1: Calcule speed and explore data
+        Just to check if there are outliers in speed
+        """
+        penguin = calcule_speed (penguin)
+        step = 'step_1'
+        save_boxplot(peng_number, trip_number, penguin, string = 'step1_nofiltered')
+        title = f"penguin{peng_number:02}_trip{trip_number}_step{1}"
+        penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
+        _plot_track(penguin, dataset = "track_"+title)
 
 
-		# STEP 3: Outlier removal
-		step = 'step_3'
-		penguin_out = penguin.loc[penguin.outlier !=True,:]
-		save_boxplot(peng_number, trip_number, penguin_out, string = 'step3_withoutoutliers')
-		title = f"penguin{peng_number:02}_trip{trip_number}_step{3}"
-		penguin_out.to_csv(_NEWDATA_FOLDER + title +".csv")
-		_plot_track(penguin_out, dataset = "track_"+title)
+        """
+        STEP 2: filtered speed by max value
+        Mark speed by max value
+        """
+        step = 'step_2'
+        # Filter speed=<0
+        penguin = penguin.loc[penguin.speed > 0,:].reset_index(drop=True) # retrocesos: eliminados, pero podrían afectar, ver si hay negativos
+        # Filter speed>20
+        penguin = penguin.loc[penguin.speed < 20,:].reset_index(drop=True)
+        title = f"penguin{peng_number:02}_trip{trip_number}_step{2}"
+        penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
+        _plot_track(penguin, dataset = "track_"+title)
+        save_boxplot(peng_number, trip_number, penguin, string = 'step2_filtered')
 
 
-		# STEP 4: downgrade temporal resolution
-		step = 'step_4'
-		# Filtro de datos minutales a menor resolución temporal: promedio temporal con la media
-		# series.resample('3T').sum() -> series.resample('1T', on = 'datetime').mean()
-		# 1T = 1 min, 5T = 5 min
-		penguin_out = penguin_out[['name', 'datetime', 'depth', 'temp', 'lon', 'lat', 'velocity', 'trip', 'peng_number']]
-		penguin_out = penguin_out.resample('5T', axis=0, on='datetime').mean()
-		title = f"penguin{peng_number:02}_trip{trip_number}_step{4}"
-		penguin_out.to_csv(_NEWDATA_FOLDER + title + ".csv")
-		_plot_track(penguin_out,dataset = "track_"+title)
-		
+        """
+        STEP 3: Outlier removal by standard deviation
+        Detect outliers in speed and remove them
+        """
+        step = 'step_3'
+        # Outlier detection
+        penguin = detect_speed_outliers(penguin)
+        penguin_out = penguin.loc[penguin.outlier !=True,:]
+        save_boxplot(peng_number, trip_number, penguin_out, string = 'step3_withoutoutliers')
+        title = f"penguin{peng_number:02}_trip{trip_number}_step{3}"
+        penguin_out.to_csv(_NEWDATA_FOLDER + title +".csv")
+        _plot_track(penguin_out, dataset = "track_"+title)
+
+
+        """
+        STEP 4:
+        Downgrade temporal resolution to 5min resolution
+        """
+        """ DEPRECATED
+        step = 'step_4'
+        # Filtro de datos minutales a menor resolución temporal: promedio temporal con la media
+        # series.resample('3T').sum() -> series.resample('1T', on = 'datetime').mean()
+        # 1T = 1 min, 5T = 5 min
+        penguin_out = penguin_out[['name', 'datetime', 'depth', 'temp', 'lon', 'lat', 'speed', 'trip', 'peng_number']]
+        penguin_out = penguin_out.resample('5T', axis=0, on='datetime').mean()
+        title = f"penguin{peng_number:02}_trip{trip_number}_step{4}"
+        penguin_out.to_csv(_NEWDATA_FOLDER + title + ".csv")
+        _plot_track(penguin_out,dataset = "track_"+title)
+        """
+
+
+        """
+        STEP 5:
+        Calcule temperature gradient, time traveling and normalized direction
+        """
+        step = 'step_5'
+        # Calcule temperature gradient
+        penguin_out = calcule_temperature_gradient(penguin_out)
+        # Calcule time traveling
+        penguin_out = calcule_time_travel(penguin_out)
+        # Calcule direction in degrees
+        penguin_out = calcule_direction(penguin_out)
+        # Normalize direction to 0-1
+        penguin_out = normalize_direction(penguin_out)
+        # Save data
+        title = f"penguin{peng_number:02}_trip{trip_number}_step{5}"
+        penguin_out.to_csv(_NEWDATA_FOLDER + title + ".csv")
+
+
+        """
+        STEP 6:
+        Final dataset per penguin
+        """
+        # Selected columns
+        penguin_fin = penguin_out[['lon', 'lat', 'temp_gradient', 'time_travel', 'direction']]
+        # Save final dataset
+        title = f"penguin{peng_number:02}_trip{trip_number}_final"
+        penguin_fin.to_csv(_NEWDATA_FOLDER + title + ".csv")
+
+        # sigmoid
+        # sin bkp
+        # con bkp
+
         # Cierre y borrado del archivo logs si no hay error
-		file_log.close()
-		os.remove(file_log_route)
-	except Exception as error:
-		write_log(file, step, error, file_log, today)
+        file_log.close()
+        os.remove(file_log_route)
+    except Exception as error:
+        write_log(file, step, error, file_log, today)
+
+
+def compose_dataset():
+    """ Compose dataset """
+    files_list = glob.glob(_NEWDATA_FOLDER+'*_final.csv')
+    dataset = pd.DataFrame()
+    for file in files_list:
+        # Concatenate data
+        dataset = pd.concat([dataset, pd.read_csv(file)], ignore_index=True)
+    dataset.reset_index(drop=True, inplace=True)
+    # Save dataset
+    dataset.to_csv(_NEWDATA_FOLDER + "dataset.csv")    
+
+
+def dataset_train_test():
+    """ Split dataset into train and test """
+    dataset = pd.read_csv(_NEWDATA_FOLDER + "dataset.csv")
+    # Split dataset into train and test
+    train, test = train_test_split(dataset, test_size=0.25)
+    # Save dataset
+    train.to_csv(_NEWDATA_FOLDER + "train.csv")
+    test.to_csv(_NEWDATA_FOLDER + "test.csv")
+
 
 
 #file = 'viaje2_newpeng03.csv'
@@ -286,22 +492,30 @@ def trajectory_analysis(file):
 
 
 if __name__ == '__main__':
-
-	files_list = glob.glob(_DATA_FOLDER+'viaje*.csv')
-
-	procs = [] #list to save the PID of the processes created
-
-	# statistical analysis
-	files_df = compose_statscsv(files_list)
-	save_barplot(files_df)
-	write_txt_statistics(files_df)
-
-	# TODO: delete: 
-	# files_list = glob.glob(_DATA_FOLDER+'viaje2_newpeng03_nido75.csv')
-	for file in files_list:
-		p = Process(target=trajectory_analysis, args=(file,))
-		procs.append(p)
-		p.start()
-
-	for p in procs:
-		p.join()
+    """ Main function """
+    # files list
+    files_list = glob.glob(_DATA_FOLDER+'viaje*.csv')
+    # list to save the PID of the processes created
+    procs = [] 
+    # statistical analysis
+    files_df = compose_statscsv(files_list)
+    save_barplot(files_df)
+    write_txt_statistics(files_df)
+    # TODO: delete: 
+    # files_list = glob.glob(_DATA_FOLDER+'viaje2_newpeng03_nido75.csv')
+    # Paralelized process to analyze each file, with a penguin trip
+    for file in files_list:
+        p = Process(target=trajectory_analysis, args=(file,)) #n-1 processes
+        procs.append(p)
+        p.start()
+    # Join all processes
+    for p in procs:
+        p.join()
+    """
+    STEP 7:
+    Final composed dataset and train and test datasets
+    """
+    # Compose dataset
+    compose_dataset()
+    # Split dataset into train and test
+    dataset_train_test()
