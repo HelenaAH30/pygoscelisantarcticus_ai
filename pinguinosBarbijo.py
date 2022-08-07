@@ -6,6 +6,7 @@ Created on Mon Nov  2 18:20:29 2020
 @author: Helena
 """
 #%% Libraries
+# Computation libraries
 import os
 import glob
 import math
@@ -13,20 +14,18 @@ import joblib
 import numpy as np
 import pandas as pd
 import geopy.distance as gp
-
+from multiprocessing import Process
+# Plotting libraries
 import seaborn as sns
-
+import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import cartopy.feature as cfeature
-import cartopy.crs as ccrs
-
-import shapely.geometry as sgeom
-
+#import shapely.geometry as sgeom
+# AI libraries
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-
 # Disable warnings
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
