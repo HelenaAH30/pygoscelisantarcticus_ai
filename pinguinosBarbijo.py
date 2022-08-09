@@ -3,7 +3,7 @@
 """
 Created on Mon Nov  2 18:20:29 2020
 
-@author: Helena
+@author: Helena Antich Homar
 """
 #%% Libraries
 # Computation libraries
@@ -31,7 +31,6 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 #%%Configuration
-# os.chdir('/Volumes/MUSI-HAH/TFM/penguin_data/nombres_unificados/')
 os.chdir('/home/helena/Documents')
 _DATA_FOLDER = './nombres_unificados/'
 _RESULTS_FOLDER = './results_peng/'
@@ -41,8 +40,7 @@ _LOGS_FOLDER = './logs/'
 
 
 #%% Functions
-
-def load_data(filename):
+def _load_rawdata(filename):
     """ Load data from file
     :param filename: (str) file name
     :return: pandas dataframe
@@ -60,7 +58,7 @@ def load_data(filename):
     return penguin
 
 
-def parse_dates(penguin):
+def _parse_rawdates(penguin):
     """ Parse dates to datetime format
     :param penguin: pandas dataframe
     :return: pandas dataframe parsed
@@ -98,7 +96,7 @@ def _replace_lat_outofrange(penguin):
     return penguin
 
 
-def calcule_speed (penguin):
+def _calcule_speed (penguin):
     """ Calculate speed
     :param penguin: pandas dataframe with lat, lon, depth, temp, datetime
     :return: pandas dataframe with speed"""
@@ -115,7 +113,7 @@ def calcule_speed (penguin):
     return penguin
 
 
-def calcule_time_travel(penguin):
+def _calcule_time_travel(penguin):
     """ Calculate time travel
     :param penguin: pandas dataframe with delta_time
     :return: pandas dataframe with time travel"""
@@ -123,7 +121,7 @@ def calcule_time_travel(penguin):
     return penguin
 
 
-def calcule_temperature_gradient(penguin, units='km'):
+def _calcule_temperature_gradient(penguin, units='km'):
     """ Calculate temperature gradient
     :param penguin: pandas dataframe with temp and delta_space
     :return: pandas dataframe with temperature gradient"""
@@ -159,7 +157,7 @@ def _calcule_compass_direction(point_i, point_f):
     return direction
 
 
-def calcule_direction(penguin):
+def _calcule_direction(penguin):
     """ Calculate direction
     :param penguin: pandas dataframe with lon, lat, depth, temp, datetime
     :return: pandas dataframe with direction
@@ -169,7 +167,7 @@ def calcule_direction(penguin):
     return penguin
 
 
-def normalize_direction(penguin):
+def _normalize_direction(penguin):
     """ Normalize direction
     :param penguin: pandas dataframe with direction
     :return: pandas dataframe with normalized direction
@@ -179,7 +177,7 @@ def normalize_direction(penguin):
     return penguin
 
 
-def extract_trip_number(filename):
+def _extract_trip_number(filename):
     """ Extract trip number from filename
     :param filename: (str) file name
     :return: (int) trip number
@@ -190,7 +188,7 @@ def extract_trip_number(filename):
     return trip_number
 
 
-def extract_peng_number(filename):
+def _extract_peng_number(filename):
     """ Extract penguin number from filename
     :param filename: (str) file name
     :return: (int) penguin number
@@ -201,7 +199,7 @@ def extract_peng_number(filename):
     return peng_number
 
 
-def save_boxplot(penguin_number, trip_number, penguin_data, string = None):
+def _save_boxplot_pengspeed(penguin_number, trip_number, penguin_data, string = None):
     """ Save boxplot of penguin data
     :param penguin_number: (int) penguin number
     :param trip_number: (int) trip number
@@ -224,22 +222,23 @@ def save_boxplot(penguin_number, trip_number, penguin_data, string = None):
     plt.close(fig) # close the figure
 
 
-def compose_statscsv(files_list):
+def _compose_statscsv(files_list):
     """ Compose stats csv file
     :param files_list: (list) list of files
     :return: (str) path to saved file
     """
     files_df = pd.DataFrame()
     files_df['files'] = files_list
-    files_df['peng_number'] = files_df.apply(lambda row: extract_peng_number(row.files), axis=1)
-    files_df['trip'] = files_df.apply(lambda row: extract_trip_number(row.files), axis=1)
+    files_df['peng_number'] = files_df.apply(lambda row: _extract_peng_number(row.files), axis=1)
+    files_df['trip'] = files_df.apply(lambda row: _extract_trip_number(row.files), axis=1)
     files_df = pd.DataFrame(files_df.groupby(['peng_number']).count())
     files_df['trip'].to_csv(_RESULTS_FOLDER + "files_statisticaldata.csv")
     return files_df
 
 
-def save_barplot(df, string = None):
-    """ Save barplot of files per penguin
+def _save_barplot_penguin(df, string = None):
+    """
+    Save barplot of files per penguin
     :param df: (pandas dataframe) files dataframe
     :param string: (str) string to add to filename
     """
@@ -261,7 +260,7 @@ def save_barplot(df, string = None):
     plt.close(fig) # close the figure
 
 
-def write_txt_statistics(files_df):
+def _write_txt_statistics(files_df):
     """ Write txt file with statistics
     :param files_df: (pandas dataframe) files dataframe"""
     file_stats_route = _RESULTS_FOLDER + "files_statisticaldata.txt"
@@ -274,7 +273,7 @@ def write_txt_statistics(files_df):
     file_stats.close()
 
 
-def write_log(file, step, error, file_log, today):
+def _write_log(file, step, error, file_log, today):
     """ Write log file"""
     file_log.write("**********************" + os.linesep)
     file_log.write(f"Fecha del análisis: {today}" + os.linesep)
@@ -285,7 +284,7 @@ def write_log(file, step, error, file_log, today):
     file_log.close()
    
 
-def detect_speed_outliers(penguin):
+def _detect_speed_outliers(penguin):
     """ Detect outliers in speed
     :param penguin: (pandas dataframe) penguin data with speed column
     :return: (pandas dataframe) penguin data with outliers removed
@@ -347,12 +346,12 @@ def trajectory_analysis(file):
     try:
         # Parse data
         step = 'parse_data'
-        penguin = load_data(file)
-        penguin = parse_dates(penguin)
+        penguin = _load_rawdata(file)
+        penguin = _parse_rawdates(penguin)
         # Penguin data
         step = 'penguin_data'
-        trip_number = extract_trip_number(file)
-        peng_number = extract_peng_number(file)
+        trip_number = _extract_trip_number(file)
+        peng_number = _extract_peng_number(file)
         # Add penguin data to dataframe
         penguin['trip'] = trip_number
         penguin['peng_number'] = peng_number
@@ -376,10 +375,10 @@ def trajectory_analysis(file):
         STEP 1: Calcule speed and explore data
         Just to check if there are outliers in speed
         """
-        penguin = calcule_speed (penguin)
+        penguin = _calcule_speed (penguin)
         step = 'step_1'
         print(step)
-        save_boxplot(peng_number, trip_number, penguin, string = 'step1_nofiltered')
+        _save_boxplot_pengspeed(peng_number, trip_number, penguin, string = 'step1_nofiltered')
         title = f"penguin{peng_number:02}_trip{trip_number}_step{1}"
         penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
         _plot_track(penguin, dataset = "track_"+title)
@@ -398,7 +397,7 @@ def trajectory_analysis(file):
         title = f"penguin{peng_number:02}_trip{trip_number}_step{2}"
         penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
         _plot_track(penguin, dataset = "track_"+title)
-        save_boxplot(peng_number, trip_number, penguin, string = 'step2_filtered')
+        _save_boxplot_pengspeed(peng_number, trip_number, penguin, string = 'step2_filtered')
 
 
         """
@@ -408,9 +407,9 @@ def trajectory_analysis(file):
         step = 'step_3'
         print(step)
         # Outlier detection
-        penguin = detect_speed_outliers(penguin)
+        penguin = _detect_speed_outliers(penguin)
         penguin_out = penguin.loc[penguin.outlier !=True,:]
-        save_boxplot(peng_number, trip_number, penguin_out, string = 'step3_withoutoutliers')
+        _save_boxplot_pengspeed(peng_number, trip_number, penguin_out, string = 'step3_withoutoutliers')
         title = f"penguin{peng_number:02}_trip{trip_number}_step{3}"
         penguin_out.to_csv(_NEWDATA_FOLDER + title +".csv")
         _plot_track(penguin_out, dataset = "track_"+title)
@@ -441,13 +440,13 @@ def trajectory_analysis(file):
         step = 'step_5'
         print(step)
         # Calcule temperature gradient
-        penguin_out = calcule_temperature_gradient(penguin_out)
+        penguin_out = _calcule_temperature_gradient(penguin_out)
         # Calcule time traveling
-        penguin_out = calcule_time_travel(penguin_out)
+        penguin_out = _calcule_time_travel(penguin_out)
         # Calcule direction in degrees
-        penguin_out = calcule_direction(penguin_out)
+        penguin_out = _calcule_direction(penguin_out)
         # Normalize direction to 0-1
-        penguin_out = normalize_direction(penguin_out)
+        penguin_out = _normalize_direction(penguin_out)
         # Save data
         title = f"penguin{peng_number:02}_trip{trip_number}_step{5}"
         penguin_out.to_csv(_NEWDATA_FOLDER + title + ".csv")
@@ -464,16 +463,11 @@ def trajectory_analysis(file):
         # Save final dataset
         title = f"penguin{peng_number:02}_trip{trip_number}_final"
         penguin_fin.to_csv(_NEWDATA_FOLDER + title + ".csv")
-
-        # sigmoid
-        # sin bkp
-        # con bkp
-
         # Cierre y borrado del archivo logs si no hay error
         file_log.close()
         os.remove(file_log_route)
     except Exception as error:
-        write_log(file, step, error, file_log, today)
+        _write_log(file, step, error, file_log, today)
 
 
 def compose_dataset():
@@ -510,7 +504,132 @@ def normalize_dataset(dataset_name):
     dataset_scaled['direction'] = dataset['direction']
     # Save scaled dataset
     dataset_scaled.to_csv(_NEWDATA_FOLDER+dataset_name+'_norm.csv')
-    
+
+
+def _write_scores(grid_param, file = 'grid_params_scores.txt'):
+    """
+    Write scores to file
+    :param grid_param: (dict) grid parameters
+    :param file: (string) file to write
+    :return: txt file with scores
+    """
+    with open(_NEWMODELS_FOLDER+file, 'w') as f:
+        f.write(str(grid_param.best_score_))
+        f.write('\n')
+        f.write(str(grid_param.best_params_))
+        f.write('\n')
+        f.write(str(grid_param.best_estimator_))
+        f.write('\n')
+        f.write(str(grid_param.best_index_))
+        f.write('\n')
+        f.write(str(grid_param.scores_))
+        f.write('\n')
+        f.write(str(grid_param.cv_results_))
+        f.close()
+
+
+def _pooled_var(stds, pool =10):
+    """
+    Compute pooled variance
+    :param stds: list of standard deviations
+    :param pool: number of samples to pool
+    :return: pooled variance
+    """
+    return np.sqrt(sum((pool-1)*(stds**2))/ len(stds)*(pool-1))
+
+def _plot_errors(grid_params,
+            results =
+            ['mean_test_score',
+            'mean_train_score',
+            'std_test_score', 
+            'std_train_score']):
+    """
+    Plot errors
+    :param grid_params: grid search parameters
+    :param results: list with results
+    :return: None
+    """
+    # Create dataframe with results
+    df = pd.DataFrame(grid_params.cv_results_)
+    # Plot errors
+    ## Create figure and subplots
+    fig, axes = plt.subplots(1, len(grid_params), 
+                            figsize = (5*len(grid_params), 7),
+                            sharey='row')
+    axes[0].set_ylabel("Score", fontsize=25)
+    ## Plot errors, add subplot per parameter
+    for idx, (param_name, param_range) in enumerate(grid_params.items()):
+        grouped_df = df.groupby(f'param_{param_name}')[results]\
+            .agg({'mean_train_score': 'mean',
+                'mean_test_score': 'mean',
+                'std_train_score': _pooled_var,
+                'std_test_score': _pooled_var})
+        ## Xlabel and ylimits
+        axes[idx].set_xlabel(param_name, fontsize=30)
+        axes[idx].set_ylim(0.0, 1.1)
+        ## Line width
+        lw = 2
+        ## Plot train score
+        axes[idx].plot(param_range, grouped_df['mean_train_score'], label="Training score",
+                    color="darkorange", lw=lw)
+        ## Plot distribution of train scores
+        axes[idx].fill_between(param_range,grouped_df['mean_train_score'] - grouped_df['std_train_score'],
+                        grouped_df['mean_train_score'] + grouped_df['std_train_score'], alpha=0.2,
+                        color="darkorange", lw=lw)
+        ## Plot test score
+        axes[idx].plot(param_range, grouped_df['mean_test_score'], label="Cross-validation score",
+                    color="navy", lw=lw)
+        ## Plot distribution of test scores
+        axes[idx].fill_between(param_range, grouped_df['mean_test_score'] - grouped_df['std_test_score'],
+                        grouped_df['mean_test_score'] + grouped_df['std_test_score'], alpha=0.2,
+                        color="navy", lw=lw)
+    ## Add legend
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc=8, ncol=2, fontsize=20)
+    ## Add suptitle
+    fig.suptitle('Validation curves', fontsize=40)
+    ## Adjust subplots space
+    fig.subplots_adjust(bottom=0.25, top=0.85)
+    ## Save figure
+    fig.savefig(_NEWDATA_FOLDER + 'errors.png')
+
+
+def tunning_hyperparameters(param_dic, model, train_dataset, x_train_vars, y_train_var):
+    """
+    Tunning hyperparameters
+    :param param_dic: (dict) grid search parameters
+    :param model: (model) model to tune
+    :param train_dataset: (dataframe) train dataset
+    :param x_train_vars: (list) list of variables to use as x
+    :param y_train_var: (string) variable to use as y
+    :return: grid search object
+    """
+    grid_param = GridSearchCV(estimator=model, param_grid=param_dic) # grid search with cross validation
+    # TODO: falta una semilla en algún sitio???? 
+    # Tunning hyperparameters
+    grid_param.fit(train_dataset[x_train_vars].values, train_dataset[y_train_var].values)
+    # Save results of tunning hyperparameters
+    ## Save results txt file 
+    _write_scores(grid_param, file = 'grid_params_scores.txt')
+    ## Save model
+    joblib.dump(grid_param.best_estimator_, _NEWMODELS_FOLDER+'model.pkl')
+    ## Plot results
+    _plot_errors(grid_param)
+    return grid_param
+
+
+def write_ai_params(model):
+    """
+    Write AI parameters to file
+    :param model: (object) AI model
+    :return: None
+    """
+    parameters = model.get_params() 
+    with open(_NEWMODELS_FOLDER+'ann_params.txt', 'w') as f:
+        f.write(str(parameters))
+        f.write('\n')
+        f.close()
+
 
 def reverse_transform_direction(direction):
     """ Reverse transform direction
@@ -521,7 +640,7 @@ def reverse_transform_direction(direction):
     return direction_deg
 
 
-def save_errorboxplot(error_values, error_title, error_unit = 'unit', string = None):
+def save_errorboxplot(error_values, error_title, error_unit = 'unit'):
     """ Save boxplot of penguin data
     :param error_values: (array) error values
     :param error_title: (string) error name
@@ -541,7 +660,7 @@ def save_errorboxplot(error_values, error_title, error_unit = 'unit', string = N
 #file = 'viaje2_newpeng03.csv'
 #file = 'viaje2_newpeng03_nido75.csv'
 
-
+#%% MAIN
 if __name__ == '__main__':
     """ Main function """
     # files list
@@ -549,10 +668,10 @@ if __name__ == '__main__':
     # list to save the PID of the processes created
     procs = [] 
     # statistical analysis
-    files_df = compose_statscsv(files_list)
-    save_barplot(files_df)
-    write_txt_statistics(files_df)
-    # TODO: delete: 
+    files_df = _compose_statscsv(files_list)
+    _save_barplot_penguin(files_df)
+    _write_txt_statistics(files_df)
+    # TODO: delete: next line
     files_list = glob.glob(_DATA_FOLDER+'viaje2_newpeng03_nido75.csv')
     # Paralelized process to analyze each file, with a penguin trip
     for file in files_list:
@@ -585,19 +704,10 @@ if __name__ == '__main__':
     STEP 9:
     Tunning hyperparameters to select the best model
     """
-    step = 'step_9'
+    step = 'step_9' #TODO: parallelize
     print(step)
-    param_dic = {
-        "hidden_layer_sizes": [(5,),(50,),(100,)], # 1 hidden layer
-        "activation": ["identity", "logistic", "relu"], # activation function
-        "solver": ["lbfgs", "sgd", "adam"], # solver
-        "alpha": [0.00005,0.0005,0.005], # learning rate (alpha)
-        "learning_rate_init":[0.01, 0.001, 0.0001] # initial learning rate
-    }
     # Define ANN
     ann = MLPRegressor(early_stopping=True,max_iter=1000) # max_iter=1000
-    # Grid search
-    grid_param = GridSearchCV(estimator=ann, param_grid=param_dic) # grid search with cross validation
     # Get train and test datasets
     train = pd.read_csv(_NEWDATA_FOLDER+'train_norm.csv')
     test = pd.read_csv(_NEWDATA_FOLDER+'test_norm.csv')
@@ -605,88 +715,24 @@ if __name__ == '__main__':
     train.dropna(inplace=True)
     test.dropna(inplace=True)
     # TODO: falta una semilla en algún sitio???? 
-    # Tunning hyperparameters
-    grid_param.fit(train[['lon','lat','temp_gradient','time_travel']].values, train['direction'].values)
-    # # Test ANN 
-    # y_pred = grid_param.predict(test[['lon','lat','temp_gradient','time_travel']].values)
-    # Save results of tunning hyperparameters
-    ## Save results txt file 
-    with open(_NEWMODELS_FOLDER+'grid_params_scores.txt', 'w') as f:
-        f.write(str(grid_param.best_score_))
-        f.write('\n')
-        f.write(str(grid_param.best_params_))
-        f.write('\n')
-        f.write(str(grid_param.best_estimator_))
-        f.write('\n')
-        f.write(str(grid_param.best_index_))
-        f.write('\n')
-        f.write(str(grid_param.scores_))
-        f.write('\n')
-        f.write(str(grid_param.cv_results_))
-        f.close()
-    ## Save model
-    joblib.dump(grid_param.best_estimator_, _NEWMODELS_FOLDER+'model.pkl')
-    ## Plot results
-    """
-    df = pd.DataFrame(gs.cv_results_)
-    results = ['mean_test_score',
-            'mean_train_score',
-            'std_test_score', 
-            'std_train_score']
-
-    def pooled_var(stds):
-        # https://en.wikipedia.org/wiki/Pooled_variance#Pooled_standard_deviation
-        n = 5 # size of each group
-        return np.sqrt(sum((n-1)*(stds**2))/ len(stds)*(n-1))
-
-    fig, axes = plt.subplots(1, len(grid_params), 
-                            figsize = (5*len(grid_params), 7),
-                            sharey='row')
-    axes[0].set_ylabel("Score", fontsize=25)
-
-
-    for idx, (param_name, param_range) in enumerate(grid_params.items()):
-        grouped_df = df.groupby(f'param_{param_name}')[results]\
-            .agg({'mean_train_score': 'mean',
-                'mean_test_score': 'mean',
-                'std_train_score': pooled_var,
-                'std_test_score': pooled_var})
-
-        previous_group = df.groupby(f'param_{param_name}')[results]
-        axes[idx].set_xlabel(param_name, fontsize=30)
-        axes[idx].set_ylim(0.0, 1.1)
-        lw = 2
-        axes[idx].plot(param_range, grouped_df['mean_train_score'], label="Training score",
-                    color="darkorange", lw=lw)
-        axes[idx].fill_between(param_range,grouped_df['mean_train_score'] - grouped_df['std_train_score'],
-                        grouped_df['mean_train_score'] + grouped_df['std_train_score'], alpha=0.2,
-                        color="darkorange", lw=lw)
-        axes[idx].plot(param_range, grouped_df['mean_test_score'], label="Cross-validation score",
-                    color="navy", lw=lw)
-        axes[idx].fill_between(param_range, grouped_df['mean_test_score'] - grouped_df['std_test_score'],
-                        grouped_df['mean_test_score'] + grouped_df['std_test_score'], alpha=0.2,
-                        color="navy", lw=lw)
-
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.suptitle('Validation curves', fontsize=40)
-    fig.legend(handles, labels, loc=8, ncol=2, fontsize=20)
-
-    fig.subplots_adjust(bottom=0.25, top=0.85)  
-    plt.show()
-    """
+    # Define parameters to tunning
+    param_dic = {
+        "hidden_layer_sizes": [(5,),(10,),(50,)], # 1 hidden layer
+        "activation": ["identity", "logistic", "relu"], # activation function
+        "solver": ["lbfgs", "sgd", "adam"], # solver
+        "alpha": [0.00005,0.0005,0.005], # learning rate (alpha)
+        "learning_rate_init":[0.01, 0.001, 0.0001] # initial learning rate
+    }
+    grid_param = tunning_hyperparameters(param_dic, ann, train, ['lon','lat','temp_gradient','time_travel'], 'direction')
     """
     STEP 10:
     Train and test datasets with the best model
     """
-    step = 'step_10'
+    step = 'step_10' #TODO: parallelize??
     print(step)
     # Save ANN model and test results
-    ## Get params used
-    parameters = ann.get_params()
-    with open(_NEWMODELS_FOLDER+'ann_params.txt', 'w') as f:
-        f.write(str(parameters))
-        f.write('\n')
-        f.close()
+    ## Save params used
+    write_ai_params(ann) # TODO: ann o grid_param?? Si es ann tengo que devolvérmela arriba 722
     ## Train ANN
     ann.fit(train[['lon','lat','temp_gradient','time_travel']].values, train['direction'].values)
     ## Test ANN 
@@ -695,9 +741,9 @@ if __name__ == '__main__':
     test['direction_pred'] = y_pred
     """
     STEP 11:
-    Computing errors
+    Computing errors made on test dataset
     """
-    step = 'step_11'
+    step = 'step_11' #TODO: parallelize??
     print(step)
     ## Get errors
     test['mae'] = mean_absolute_error(test['direction'].values, test['direction_pred'].values)
@@ -716,6 +762,12 @@ if __name__ == '__main__':
     ### Save predictions, errors and metrics
     test.to_csv(_RESULTS_FOLDER + "test_prediction_norm.csv")
     ## Plot errors
+    save_errorboxplot(test['mae'].values, 'MAE')
+    save_errorboxplot(test['mse'].values, 'MSE')
+    save_errorboxplot(test['r2'].values, 'R2')
+    save_errorboxplot(test['mae_deg'].values, 'MAE_deg', error_unit='degrees')
+    save_errorboxplot(test['mse_deg'].values, 'MSE_deg', error_unit='degrees')
+    save_errorboxplot(test['r2_deg'].values, 'R2_deg', error_unit='degrees')
 
 
     
