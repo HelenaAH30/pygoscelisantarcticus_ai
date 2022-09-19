@@ -6,6 +6,9 @@ Created on Mon Nov  2 18:20:29 2020
 @author: Helena Antich Homar
 """
 #%% Libraries
+# Disable warnings
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 # Computation libraries
 import os
 import glob
@@ -19,16 +22,14 @@ from multiprocessing import Process
 import seaborn as sns
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
-import cartopy.feature as cfeature
 #import shapely.geometry as sgeom
+import cartopy.feature as cfeature
+import matplotlib.colors as mcolors
 # AI libraries
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-# Disable warnings
-import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
 #%%Configuration
 os.chdir('/home/helena/Documents')
@@ -75,7 +76,8 @@ def _distance_btwn_lonlatpoints(lon_1, lat_1, lon_2, lat_2):
     :param lat_1: (float) latitude of point 1
     :param lon_2: (float) longitude of point 2
     :param lat_2: (float) latitude of point 2
-    :return: (float) distance between points"""
+    :return: (float) distance between points (km)
+    """
     coords_1 = (lat_1,lon_1)
     coords_2 = (lat_2,lon_2)
     try:
@@ -99,7 +101,8 @@ def _replace_lat_outofrange(penguin):
 def _calcule_speed (penguin):
     """ Calculate speed
     :param penguin: pandas dataframe with lat, lon, depth, temp, datetime
-    :return: pandas dataframe with speed"""
+    :return: pandas dataframe with speed (km/h)
+    """
     # Calcule of time delta between points
     penguin['delta_time'] = penguin.datetime.diff()
     penguin['delta_time'] = penguin.apply(lambda row: row.delta_time.total_seconds(), axis=1)
@@ -109,7 +112,9 @@ def _calcule_speed (penguin):
     penguin[['lon_shift', 'lat_shift']] = penguin[['lon', 'lat']].shift(periods=1)
     penguin['delta_space'] = penguin.apply(lambda row: _distance_btwn_lonlatpoints(row.lon, row.lat, row.lon_shift, row.lat_shift), axis=1)
     #Calcule speed column
-    penguin['speed'] = penguin['delta_space']/penguin['delta_time']
+    penguin['speed'] = penguin['delta_space']/penguin['delta_time'] # km/s
+    # Convert speed to km/h
+    penguin['speed'] = penguin['speed'] * 3600
     return penguin
 
 
@@ -121,19 +126,34 @@ def _calcule_time_travel(penguin):
     return penguin
 
 
-def _calcule_temperature_gradient(penguin, units='km'):
+def _calcule_temperature_gradient(penguin):
     """ Calculate temperature gradient
     :param penguin: pandas dataframe with temp and delta_space
-    :return: pandas dataframe with temperature gradient"""
+    :return: pandas dataframe with temperature gradient (ºC/km)
+    """
     # Calcule temperature difference between points
     penguin['temp_delta'] = penguin.temp.diff()
     # Calcule temperature gradient column
     penguin['temp_gradient'] = penguin.apply(lambda row: row.temp_delta/row.delta_space, axis=1)
-    if units == 'km':
-        return penguin
-    elif units == 'm':
-        penguin['temp_gradient'] = penguin['temp_gradient']*1000
-        return penguin
+    # Convert temperature gradient to ºC/m
+    penguin['temp_gradient'] = penguin['temp_gradient'] * 1000
+    return penguin
+
+
+def _filter_column_outliers(penguin, column):
+    """ Detect temperature gradient outliers
+    :param penguin: pandas dataframe with temp_gradient
+    :param column: (str) column name
+    :return: pandas dataframe with outliers column"""
+    m = penguin[column].mean()
+    s = penguin[column].std()
+    sigma3 = 3*s
+    # Detect outliers
+    penguin['outlier_temp'] = (penguin[column] >= m + sigma3) | (penguin[column] <= m - sigma3) #element-wise | and &
+    penguin = penguin.loc[not(penguin['outlier_temp'])]
+    penguin.drop('outlier_temp', axis=1, inplace=True)
+    penguin.reset_index(drop=True, inplace=True)
+    return penguin
 
 
 def _calcule_compass_direction(point_i, point_f):
@@ -209,7 +229,7 @@ def _save_boxplot_pengspeed(penguin_number, trip_number, penguin_data, string = 
     """
     # plot
     boxplot = sns.boxplot(x=penguin_data['speed'])
-    boxplot.set_xlabel('Speed (m/s)')
+    boxplot.set_xlabel('Speed (km/h)')
     boxplot.set(title = f'Penguin {penguin_number} - Trip {trip_number}')
     # create figure
     fig = boxplot.get_figure()
@@ -308,7 +328,7 @@ def _plot_track(penguin, dataset ='test'):
     num = penguin.loc[1,'peng_number']
     trip = penguin.loc[1,'trip']
     depth = penguin ['depth']
-    #%% Plot configuration
+    # Plot configuration
     lonW = -61.167 #min(lons) 
     lonE = -60.50 #max(lons)
     latS = -63.3 #min(lats)
@@ -318,19 +338,79 @@ def _plot_track(penguin, dataset ='test'):
     ax = plt.axes(projection=ccrs.PlateCarree()) #ccrs.SouthPolarStereo()
     ax.set_extent([lonW, lonE, latS, latN])
     ## Track plot
-    points = plt.scatter(x=lons, y=lats, c= depth, cmap='viridis', s=0.1, marker='o')
+    points = plt.scatter(x=lons, y=lats, c= depth, cmap='viridis', s=0.1, marker='o',zorder = 2)
+    lines = plt.plot(lons, lats, color='gray', linewidth=0.1, zorder=1)
     ## Coastlines
     ax.add_feature(cfeature.GSHHSFeature(levels = [1,2,3,4],scale='full',facecolor='silver'), zorder=100)
     ## Layout
     plt.colorbar(label="Depth (m)", orientation="vertical")
     ax.set_xticks(np.round(np.linspace(lonW,lonE,5),2), crs=ccrs.PlateCarree())
     ax.set_yticks(np.round(np.linspace(latS,latN,10),2), crs=ccrs.PlateCarree())
-    ax.set_title(f'Penguin number: {num} - trip: {trip}',fontsize=12)
-    ax.set_ylabel('Latitude',fontsize=12)
-    ax.set_xlabel('Longitude',fontsize=12)
+    ax.set_title(f'Penguin number: {num} - trip: {trip}',fontsize=10)
+    ax.set_ylabel('Latitude',fontsize=8)
+    ax.set_xlabel('Longitude',fontsize=8)
     ## Save figure
     plt.savefig(_RESULTS_FOLDER +'figures/'+dataset+'.png', dpi=500) # resolution = 300 dpi
     # TODO: delete plt.savefig('test.png')
+    ## Close figure
+    plt.close(fig)
+
+
+def _plot_multitrack(penguin, figname ='test'):
+    """ Plot track
+    :param penguin: (pandas dataframe) penguin data
+    :param dataset: (str) dataset name
+    """
+    # Color palette
+    viridis = plt.get_cmap('viridis')
+    # Plot configuration
+    ## Lat-Lon limits
+    lonW = -61.4 #min(lons) 
+    lonE = -60.70 #max(lons)
+    latS = -63.15 #min(lats)
+    latN = -62.9 #max(lats)
+    ## Axes
+    fig = plt.figure()
+    ax = plt.axes(projection=ccrs.PlateCarree()) #ccrs.SouthPolarStereo()
+    ax.set_extent([lonW, lonE, latS, latN])
+
+    # penguin-trip unique values
+    penguin['pengs_trips'] = ['-'.join(i) for i in zip(('peng'+penguin["peng_number"].map(str)),('trip'+penguin["trip"].map(str)))]
+    pengs_trips = penguin['pengs_trips'].unique()
+    colors = viridis(np.linspace(0, 1, len(pengs_trips)))
+    # plot each penguin-trip
+    for i in range(len(pengs_trips)):
+        peng_trip = pengs_trips[i]
+        color = mcolors.rgb2hex(colors[i])
+        peng_trip_df = penguin[penguin['pengs_trips'] == peng_trip]
+        lons = peng_trip_df['lon']
+        lats = peng_trip_df['lat']
+        plt.plot(lons, lats, color=color, linewidth=0.4, label = peng_trip)
+    ## Coastlines
+    ax.add_feature(cfeature.GSHHSFeature(levels = [1,2,3,4],scale='full',facecolor='snow'), zorder=100)
+    ## Layout
+    ax.tick_params(axis='both', which='major', labelsize=6)
+    ax.tick_params(axis='both', which='minor', labelsize=6)
+    ax.set_xticks(np.round(np.linspace(lonW,lonE,5),2), crs=ccrs.PlateCarree())
+    ax.set_yticks(np.round(np.linspace(latS,latN,5),2), crs=ccrs.PlateCarree())
+    ax.set_title('All trajectories',fontsize=9)
+    ax.set_ylabel('Latitude',fontsize=8)
+    ax.set_xlabel('Longitude',fontsize=8)
+    # Legend
+    # plt.legend(loc='upper center', bbox_to_anchor=(2,0.5),
+    #       ncol=3, fancybox=True, shadow=True)
+    # Shrink current axis's height by 20% on the bottom
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0 + box.height * 0.2,
+                    box.width, box.height * 0.8])
+    # Put a legend below current axis
+    leg = ax.legend(loc='upper center', bbox_to_anchor=(0.45, -0.4),
+            fancybox=True, shadow=True, ncol=5, prop={'size': 6})
+    # set the linewidth of each legend object
+    for legobj in leg.legendHandles:
+        legobj.set_linewidth(2.0)
+    ## Save figure
+    plt.savefig(_RESULTS_FOLDER +'figures/'+figname+'.png', dpi=500, transparent=True) # resolution = 300 dpi
     ## Close figure
     plt.close(fig)
 
@@ -390,10 +470,10 @@ def trajectory_analysis(file):
         """
         step = 'step_2'
         print(step)
-        # Filter speed=<0
-        penguin = penguin.loc[penguin.speed > 0,:].reset_index(drop=True) # retrocesos: eliminados, pero podrían afectar, ver si hay negativos
-        # Filter speed>20
-        penguin = penguin.loc[penguin.speed < 20,:].reset_index(drop=True)
+        # Filter speed = 0 (if penguin is not moving, no behaviour can be detected)
+        penguin = penguin.loc[penguin.speed != 0,:].reset_index(drop=True) 
+        # Filter speed > 60km/h
+        penguin = penguin.loc[penguin.speed < 60,:].reset_index(drop=True)
         title = f"penguin{peng_number:02}_trip{trip_number}_step{2}"
         penguin.to_csv(_NEWDATA_FOLDER + title + ".csv")
         _plot_track(penguin, dataset = "track_"+title)
@@ -441,6 +521,8 @@ def trajectory_analysis(file):
         print(step)
         # Calcule temperature gradient
         penguin_out = _calcule_temperature_gradient(penguin_out)
+        # Detect and delete outliers in temperature gradient
+        penguin_out = _filter_column_outliers(penguin_out, column = 'temp_gradient')
         # Calcule time traveling
         penguin_out = _calcule_time_travel(penguin_out)
         # Calcule direction in degrees
@@ -470,16 +552,34 @@ def trajectory_analysis(file):
         _write_log(file, step, error, file_log, today)
 
 
+def _save_dataset(dataset, title='dataset'):
+    """
+    Save dataset in a csv file
+    :param df: dataframe
+    :return: None
+    """
+    # Reset index
+    dataset.reset_index(drop=True, inplace=True)
+    # Save dataset
+    dataset.to_csv(_NEWDATA_FOLDER + f"{title}.csv", index=False) 
+    return dataset
+
+
 def compose_dataset():
     """ Compose dataset """
     files_list = glob.glob(_NEWDATA_FOLDER+'*_final.csv')
     dataset = pd.DataFrame()
     for file in files_list:
-        # Concatenate data
-        dataset = pd.concat([dataset, pd.read_csv(file)], ignore_index=True)
-    dataset.reset_index(drop=True, inplace=True)
+        # Read file
+        df = pd.read_csv(file, index_col=0)
+        # Add peng_number and trip
+        df['peng_number'] = int(file.split('/')[-1].split('_')[0].split('penguin')[-1])
+        df['trip'] = int(file.split('/')[-1].split('_')[1].split('trip')[-1])
+        # Add file to dataset
+        dataset = pd.concat([dataset, df], ignore_index=True)
     # Save dataset
-    dataset.to_csv(_NEWDATA_FOLDER + "dataset.csv", index=False)    
+    dataset = _save_dataset(dataset, title='dataset')
+    return dataset  
 
 
 def dataset_train_test():
@@ -500,7 +600,7 @@ def normalize_dataset(dataset_name):
     dataset = pd.read_csv(_NEWDATA_FOLDER+dataset_name+'.csv')
     # Normalize dataset
     scaled_array = StandardScaler().fit_transform(dataset[['lon','lat','temp_gradient','time_travel']])
-    dataset_scaled = pd.DataFrame(scaled_array, columns=['lon','lat','temp_gradient','time_travel'])
+    dataset_scaled = pd.DataFrame(scaled_array, columns=['lon','lat','temp_gradient','time_travel','pengs_trips'])
     dataset_scaled['direction'] = dataset['direction']
     # Save scaled dataset
     dataset_scaled.to_csv(_NEWDATA_FOLDER+dataset_name+'_norm.csv')
@@ -514,16 +614,19 @@ def _write_scores(grid_param, file = 'grid_params_scores.txt'):
     :return: txt file with scores
     """
     with open(_NEWMODELS_FOLDER+file, 'w') as f:
+        f.write('Best score')
         f.write(str(grid_param.best_score_))
         f.write('\n')
+        f.write('Best parameters')
         f.write(str(grid_param.best_params_))
         f.write('\n')
+        f.write('Best estimator')
         f.write(str(grid_param.best_estimator_))
         f.write('\n')
+        f.write('Best index')
         f.write(str(grid_param.best_index_))
         f.write('\n')
-        f.write(str(grid_param.scores_))
-        f.write('\n')
+        f.write('Scores')
         f.write(str(grid_param.cv_results_))
         f.close()
 
@@ -537,61 +640,29 @@ def _pooled_var(stds, pool =10):
     """
     return np.sqrt(sum((pool-1)*(stds**2))/ len(stds)*(pool-1))
 
-def _plot_errors(grid_params,
-            results =
-            ['mean_test_score',
-            'mean_train_score',
-            'std_test_score', 
-            'std_train_score']):
+def _plot_errors(grid_params, number_of_best_combinations = 10,
+                results = ['mean_test_score', 'std_test_score'], all_combinations = False):
     """
     Plot errors
     :param grid_params: grid search parameters
+    :param number_of_best_combinations: number of best combinations to plot
     :param results: list with results
     :return: None
     """
+    # Plot style
+    sns.set_theme(style="whitegrid")
     # Create dataframe with results
     df = pd.DataFrame(grid_params.cv_results_)
+    cols = df.filter(regex=("param_.*")).columns.to_list()
+    max_combinations = number_of_best_combinations if not all_combinations else df["rank_test_score"].max()
+    df_filtered = df[df["rank_test_score"] <= max_combinations]
     # Plot errors
-    ## Create figure and subplots
-    fig, axes = plt.subplots(1, len(grid_params), 
-                            figsize = (5*len(grid_params), 7),
-                            sharey='row')
-    axes[0].set_ylabel("Score", fontsize=25)
-    ## Plot errors, add subplot per parameter
-    for idx, (param_name, param_range) in enumerate(grid_params.items()):
-        grouped_df = df.groupby(f'param_{param_name}')[results]\
-            .agg({'mean_train_score': 'mean',
-                'mean_test_score': 'mean',
-                'std_train_score': _pooled_var,
-                'std_test_score': _pooled_var})
-        ## Xlabel and ylimits
-        axes[idx].set_xlabel(param_name, fontsize=30)
-        axes[idx].set_ylim(0.0, 1.1)
-        ## Line width
-        lw = 2
-        ## Plot train score
-        axes[idx].plot(param_range, grouped_df['mean_train_score'], label="Training score",
-                    color="darkorange", lw=lw)
-        ## Plot distribution of train scores
-        axes[idx].fill_between(param_range,grouped_df['mean_train_score'] - grouped_df['std_train_score'],
-                        grouped_df['mean_train_score'] + grouped_df['std_train_score'], alpha=0.2,
-                        color="darkorange", lw=lw)
-        ## Plot test score
-        axes[idx].plot(param_range, grouped_df['mean_test_score'], label="Cross-validation score",
-                    color="navy", lw=lw)
-        ## Plot distribution of test scores
-        axes[idx].fill_between(param_range, grouped_df['mean_test_score'] - grouped_df['std_test_score'],
-                        grouped_df['mean_test_score'] + grouped_df['std_test_score'], alpha=0.2,
-                        color="navy", lw=lw)
-    ## Add legend
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc=8, ncol=2, fontsize=20)
-    ## Add suptitle
-    fig.suptitle('Validation curves', fontsize=40)
-    ## Adjust subplots space
-    fig.subplots_adjust(bottom=0.25, top=0.85)
+    g = sns.barplot(data=df_filtered, x="rank_test_score", y=results[0], palette="viridis")
+    g.despine(left=True)
+    g.set_axis_labels("", "Rank test score")
+    g.legend.set_title("")
     ## Save figure
-    fig.savefig(_NEWDATA_FOLDER + 'errors.png')
+    plt.savefig(_NEWDATA_FOLDER + 'errors.png')
 
 
 def tunning_hyperparameters(param_dic, model, train_dataset, x_train_vars, y_train_var):
@@ -644,7 +715,7 @@ def save_errorboxplot(error_values, error_title, error_unit = 'unit'):
     """ Save boxplot of penguin data
     :param error_values: (array) error values
     :param error_title: (string) error name
-
+    :param error_unit: (string) error unit
     :return: (str) path to saved file
     """
     # plot
@@ -657,8 +728,32 @@ def save_errorboxplot(error_values, error_title, error_unit = 'unit'):
     fig.savefig(_RESULTS_FOLDER + 'figures/' + f'{filename}.png')
     plt.close(fig) # close the figure
 
-#file = 'viaje2_newpeng03.csv'
-#file = 'viaje2_newpeng03_nido75.csv'
+
+def save_variable_histogram(df, variable, title = None, xmax = None, ymax = None, ymin = None):
+    """ Save histogram of variable
+    :param df: (dataframe) dataframe with variable
+    :param variable: (string) variable name
+    :return: None
+    """
+    # plot
+    histogram = sns.histplot(data=df, x=variable, kde=True)
+    histogram.set_xlabel(f'{variable}')
+    if title!=None:
+        histogram.set(title = f'{title}')
+    else:
+        histogram.set(title = f'Histogram {variable}')
+    # set limits
+    if xmax != None:
+        histogram.set_xlim(0, xmax)
+    if (ymax != None) and (ymin != None):
+        histogram.set_ylim(ymin, ymax)
+    # create figure
+    fig = histogram.get_figure()
+    filename = '_'.join(variable.split(' '))
+    path_filename = _RESULTS_FOLDER + 'figures/' + f'histogram_{filename}.png'
+    fig.savefig(path_filename)
+    plt.close(fig) # close the figure
+
 
 #%% MAIN
 if __name__ == '__main__':
@@ -672,16 +767,18 @@ if __name__ == '__main__':
     _save_barplot_penguin(files_df)
     _write_txt_statistics(files_df)
     # TODO: delete: next line
-    files_list = glob.glob(_DATA_FOLDER+'viaje2_newpeng03_nido75.csv')
+    # files_list = glob.glob(_DATA_FOLDER+'viaje2_newpeng03_nido75.csv')
     # Paralelized process to analyze each file, with a penguin trip
     for file in files_list:
-        """ STEPS 1 to 6 """
+        """ STEPS 1 to 6 (both included) """
         p = Process(target=trajectory_analysis, args=(file,)) #n-1 processes
         procs.append(p)
         p.start()
     # Join all processes
     for p in procs:
         p.join()
+
+    #%%
     """
     STEP 7:
     Composed dataset and train and test datasets
@@ -689,7 +786,17 @@ if __name__ == '__main__':
     step = 'step_7'
     print(step)
     # Compose dataset
-    compose_dataset()
+    dataset = compose_dataset()
+    # Last inspection before training
+    ## Plot all tracks on a map
+    _plot_multitrack(dataset, 'all_tracks')
+    ### After visual inspection, we can see that there are some outliers
+    ### We will remove them
+    dataset = dataset[dataset['lon'] > -61.4]
+    # Plot histogram of variables
+    save_variable_histogram(dataset, 'temp_gradient', title = 'Temperature gradient histogram', xmax = None, ymax = None, ymin = None)
+    # Save dataset
+    dataset = _save_dataset(dataset, title='dataset')
     # Split dataset into train and test
     dataset_train_test()
     """
@@ -700,11 +807,12 @@ if __name__ == '__main__':
     print(step)
     normalize_dataset('train')
     normalize_dataset('test')
+    #%%
     """
     STEP 9:
     Tunning hyperparameters to select the best model
     """
-    step = 'step_9' #TODO: parallelize
+    step = 'step_9' #It seems to be already parallelized
     print(step)
     # Define ANN
     ann = MLPRegressor(early_stopping=True,max_iter=1000) # max_iter=1000
@@ -724,6 +832,8 @@ if __name__ == '__main__':
         "learning_rate_init":[0.01, 0.001, 0.0001] # initial learning rate
     }
     grid_param = tunning_hyperparameters(param_dic, ann, train, ['lon','lat','temp_gradient','time_travel'], 'direction')
+    
+    #%%
     """
     STEP 10:
     Train and test datasets with the best model
@@ -732,7 +842,8 @@ if __name__ == '__main__':
     print(step)
     # Save ANN model and test results
     ## Save params used
-    write_ai_params(ann) # TODO: ann o grid_param?? Si es ann tengo que devolvérmela arriba 722
+    ann = MLPRegressor(early_stopping=True,max_iter=1000, hidden_layer_sizes=grid_param['hidden_layer_sizes'], activation=grid_param['activation'], solver=grid_param['solver'], alpha=grid_param['alpha'], learning_rate_init=grid_param['learning_rate_init'])
+    write_ai_params(ann) # save params used
     ## Train ANN
     ann.fit(train[['lon','lat','temp_gradient','time_travel']].values, train['direction'].values)
     ## Test ANN 
@@ -741,11 +852,14 @@ if __name__ == '__main__':
     test['direction_pred'] = y_pred
     """
     STEP 11:
-    Computing errors made on test dataset
+    Computing specific errors made on test dataset
     """
-    step = 'step_11' #TODO: parallelize??
+    step = 'step_11'
     print(step)
     ## Get errors
+    test['absolute_error'] = abs(test['direction'] - test['direction_pred'])
+    scores = pd.DataFrame(test.groupby('model').apply(lambda group: mean_absolute_error(group.direction.values, group.direction_pred.values)))
+    scores = scores.merge(pd.DataFrame(test.groupby('model').apply(lambda group: mean_absolute_error(group.direction.values, group.direction_pred.values))))
     test['mae'] = mean_absolute_error(test['direction'].values, test['direction_pred'].values)
     test['mse'] = mean_squared_error(test['direction'].values, test['direction_pred'].values)
     test['r2'] = r2_score(test['direction'].values, test['direction_pred'].values)
@@ -762,6 +876,8 @@ if __name__ == '__main__':
     ### Save predictions, errors and metrics
     test.to_csv(_RESULTS_FOLDER + "test_prediction_norm.csv")
     ## Plot errors
+    save_errorboxplot(test['absolute_error'].values, 'Absolute error')
+
     save_errorboxplot(test['mae'].values, 'MAE')
     save_errorboxplot(test['mse'].values, 'MSE')
     save_errorboxplot(test['r2'].values, 'R2')

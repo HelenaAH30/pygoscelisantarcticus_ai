@@ -1,6 +1,6 @@
 <mxfile host="65bd71144e">
     <diagram id="D91BQI79NiKYmb_ce4ez" name="Página-1">
-        <mxGraphModel dx="856" dy="627" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+        <mxGraphModel dx="579" dy="312" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
@@ -118,28 +118,28 @@
                 <mxCell id="29" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#440154;strokeColor=#21918C;" parent="1" vertex="1">
                     <mxGeometry x="545" y="574" width="80" height="80" as="geometry"/>
                 </mxCell>
-                <mxCell id="47" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#FDE725;" edge="1" parent="1" source="46" target="28">
+                <mxCell id="47" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#FDE725;" parent="1" source="46" target="28" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="48" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#5EC962;" edge="1" parent="1" source="46" target="12">
+                <mxCell id="48" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#5EC962;" parent="1" source="46" target="12" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="49" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#21918C;" edge="1" parent="1" source="46" target="13">
+                <mxCell id="49" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#21918C;" parent="1" source="46" target="13" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="50" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#3B528B;" edge="1" parent="1" source="46" target="27">
+                <mxCell id="50" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#3B528B;" parent="1" source="46" target="27" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="51" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#440154;" edge="1" parent="1" source="46" target="29">
+                <mxCell id="51" style="edgeStyle=none;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#440154;" parent="1" source="46" target="29" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="46" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFFFFF;strokeColor=#23445d;gradientColor=#28ae80;gradientDirection=east;" vertex="1" parent="1">
+                <mxCell id="46" value="" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#FFFFFF;strokeColor=#23445d;gradientColor=#28ae80;gradientDirection=east;" parent="1" vertex="1">
                     <mxGeometry x="336" y="327" width="80" height="80" as="geometry"/>
                 </mxCell>
-                <mxCell id="53" value="" style="edgeStyle=none;html=1;strokeColor=#21918C;" edge="1" parent="1" source="52" target="46">
+                <mxCell id="53" value="" style="edgeStyle=none;html=1;strokeColor=#21918C;" parent="1" source="52" target="46" edge="1">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>
-                <mxCell id="52" value="Coordinates&lt;br&gt;[latitude-longitude]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#28AE80;strokeColor=#23445d;gradientColor=#28ae80;gradientDirection=east;fontColor=#FFFFFF;" vertex="1" parent="1">
+                <mxCell id="52" value="Coordinates&lt;br&gt;[latitude]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#28AE80;strokeColor=#23445d;gradientColor=#28ae80;gradientDirection=east;fontColor=#FFFFFF;" parent="1" vertex="1">
                     <mxGeometry x="165" y="337" width="120" height="60" as="geometry"/>
                 </mxCell>
             </root>
